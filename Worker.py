@@ -141,8 +141,8 @@ class Worker(QObject):
         t1_s = int((t1_s - self.start) * res_time)
         t2_r = int((t2_r - self.start) * res_time)
     
-        self.offset = (t1_r - t1_s - t2_r + t2_s) / 2
-        self.delay = (t1_r - t1_s + t2_r - t2_s) / 2
+        self.offset = round((t1_r - t1_s - t2_r + t2_s) / 2)
+        self.delay = round((t1_r - t1_s + t2_r - t2_s) / 2)
 
         return None
         
@@ -192,11 +192,13 @@ class Worker(QObject):
 
                 #emptylist.append(str(d['time']) + str( d['rotvec']))
 
-                
+                timestamp = datetime.now()
+                timestamp.microsecond = timestamp.microsecond - delay
+
 
                 diff = time.time() - beg
 
-                emptylist.append(', '.join(el for el in numpy.concatenate([d['time'],d['acc'],d['gyr'],d['mag'],d['grav'], d['linacc'],d['rotvec'][0:4],d['rotmat'][0:3],d['rotmat'][4:7],d['rotmat'][8:11]])))
+                emptylist.append(', '.join(el for el in numpy.concatenate([timestamp.isoformat(), d['time'],d['acc'],d['gyr'],d['mag'],d['grav'], d['linacc'],d['rotvec'][0:4],d['rotmat'][0:3],d['rotmat'][4:7],d['rotmat'][8:11]])))
 
                 linacc.append(d['linacc'])
                 if flag: #start time flag
@@ -307,10 +309,11 @@ class Worker(QObject):
             #         break
 
                 if diff >= time_end:
-                    with open('test_sensor_data/' + str(self.port)+ str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.csv', 'a') as the_file:
+                    dt = datetime.now()
+                    with open('test_sensor_data/' + str(self.port)+ dt.isoformat(timespec='seconds') + '.csv', 'a') as the_file:
                          the_file.write('\n'.join(el for el in emptylist))
-                    print(str(self.port), " - stoped" )  
-                    print(M)
+                    #print(str(self.port), " - stopped" )  
+                    #print(M)
                      #print(gist_times)
                      #print(times)  
                     break           
