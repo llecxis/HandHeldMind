@@ -4,12 +4,21 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import vtk
-import math
+#import math
 import numpy as np
 import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
+
+import re
+import threading
+#import skinematics as skin
+#import matplotlib.pyplot as plt
+import select
+#import vector
+#from scipy import interpolate
+#from scipy.signal import savgol_filter
 
 class Worker(QObject):
     """
@@ -32,15 +41,6 @@ class Worker(QObject):
     @pyqtSlot()
     def work(self):
 
-        import sys
-        import socket, traceback, re, math, threading, time, random, numpy
-        import skinematics as skin
-        import matplotlib.pyplot as plt
-        import select
-        import numpy as np
-        import vector
-        from scipy import interpolate
-        from scipy.signal import savgol_filter
         te = 100
         
         emptylist = list()
@@ -58,6 +58,7 @@ class Worker(QObject):
         # for step in range(100):
         #     time.sleep(0.1)
         ##################################################
+        # TODO: put in separate functions data receiving
         host = ''
 
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

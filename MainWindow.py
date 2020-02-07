@@ -4,12 +4,16 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import vtk
-import math
+#import math
 import numpy as np
-import time
+#import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
+
+import os
+
+from scipy import interpolate
 
 import Worker
 import Draw
@@ -21,11 +25,7 @@ def trap_exc_during_debug(*args):
     # when app raises uncaught exception, print info
     print(args)
 
-# install exception hook: without this, uncaught exception would cause application to exit
-sys.excepthook = trap_exc_during_debug
-
 def get_files(directory):
-    import os
     files = os.listdir(directory)
     for i in range(0,len(files)):
         files[i] = directory + files[i]
@@ -44,7 +44,6 @@ def parse(mes):
     return d
 
 def integ(x, tck, constant = 10e-9):
-    from scipy import interpolate
     x = np.atleast_1d(x)
     out = np.zeros(x.shape, dtype=x.dtype)
     for n in range(len(out)):
@@ -105,7 +104,8 @@ class MainWindow(QMainWindow):
         self.createLogDockWidget()
 
         self.configureClicks()
-        
+
+        # TODO: initialize video recorder        
 
         self.log_text.append("Initialization Ok")
         #self.log_text.append()
@@ -177,11 +177,13 @@ class MainWindow(QMainWindow):
         self.play.setDisabled(True)
         self.stop.setEnabled(True)
         self.timer.start(self.timeStep)
+        # TODO: start video recording 
 
     def vtkEndCall(self):
         self.stop.setDisabled(True)
         self.play.setEnabled(True)
         self.timer.stop()
+        # TODO: stop video recording
 
     def KeyPress(self,obj, event):
         import re
@@ -687,7 +689,15 @@ class MainWindow(QMainWindow):
             self.log_text.append('To connect IP : ' + str(host_ip) )
             self.log_text.append('Start from port: 5555')
 
-App = QApplication(sys.argv)
-window = MainWindow()
-sys.exit(App.exec())
+
+if __name__ == "__main__":
+
+    # install exception hook: without this, uncaught exception would cause application to exit
+    sys.excepthook = trap_exc_during_debug
+
+    # TODO: set up video recorder
+
+    App = QApplication(sys.argv)
+    window = MainWindow()
+    sys.exit(App.exec())
 

@@ -1,4 +1,4 @@
-import math
+#import math
 import numpy as np
 
 def three_qtr_solve(qtr_a,qtr_b,qtr_c): # A = X*B*C (looking for X)
