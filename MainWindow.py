@@ -292,7 +292,7 @@ class MainWindow(QMainWindow):
         
         i_actor = 4
         #self.temp_qtr = self.qtrs[1]
-        self.temp_qtr = self.three_qtr_multiplication(self.YX_qtr,self.qtrs[2],self.qtrs[1])
+        self.temp_qtr = self.qtrs[1] #self.three_qtr_multiplication(self.YX_qtr,self.qtrs[2],self.qtrs[1])
         #self.temp_qtr = self.qtr_multiplication(self.temp_qtr, self.qtrs[1])
         self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[1], i_actor)
 

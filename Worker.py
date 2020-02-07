@@ -11,14 +11,39 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
 
-import re
-import threading
+#import re
+#import threading
 #import skinematics as skin
 #import matplotlib.pyplot as plt
 import select
 #import vector
 #from scipy import interpolate
 #from scipy.signal import savgol_filter
+
+from datetime import datetime
+
+
+
+SO_BIND = 0
+SO_CONNECT = 1
+
+
+def init_socket(port: int, flag, host=''):
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    if flag == SO_BIND:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        s.bind((host, port))
+    elif flag == SO_CONNECT:
+        s.connect((host, port))
+    else:
+        # TODO: add exception 
+        return s
+
+    return s
+
 
 class Worker(QObject):
     """
@@ -37,6 +62,12 @@ class Worker(QObject):
         self.__id = id
         self.port = port
         self.__abort = False
+        self.sckt_in = init_socket(self.port, SO_BIND)
+        self.sckt_out = init_socket(self.port, SO_CONNECT)
+        self.start = time.time()
+        self.offset = 0
+        self.delay = 0
+        # TODO: create ip finder
 
     @pyqtSlot()
     def work(self):
@@ -58,15 +89,65 @@ class Worker(QObject):
         # for step in range(100):
         #     time.sleep(0.1)
         ##################################################
-        # TODO: put in separate functions data receiving
-        host = ''
 
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        s.bind((host, self.port))
+        while 1:
+            
+            self.sync_time()
+            self.recieve_data()
 
-        beg = time.time()
+    def sync_time(self):
+        
+        res_time=1000000
+
+        mes_test = 'time'
+        message = ''
+        t1_s = time.time()
+        str_ms = str((t1_s - self.start)*res_time).split('.')[0]
+        cur_mes_test = mes_test + ',' + str_ms
+    
+        self.sckt_out.send(cur_mes_test.encode())
+
+        while 1:
+            try:
+                if message[:len(mes_test)] == mes_test:
+                    
+                    t1_r = int(message.split(',')[2])
+                    t2_s = int(message.split(',')[3])
+                    str_ms = str((t2_r - self.start)*res_time).split('.')[0]
+                    cur_mes_test = message + ',' + str_ms
+                    
+                    time.sleep(0.01)
+                    t3_s = time.time()
+                    str_ms = str((t3_s - self.start)*res_time).split('.')[0]
+                    cur_mes_test = message + ',' + str_ms
+                    self.sckt_out.send(cur_mes_test.encode())
+                    break
+                else:
+                    mes, address = self.sckt_out.recvfrom(8192)
+                    message = mes.decode()
+                    t2_r = time.time()
+                
+            except socket.timeout:
+                t1_s = time.time()
+                str_ms = str((t1_s - self.start)*res_time).split('.')[0]
+                cur_mes_test = mes_test + ',' + str_ms
+                self.sckt_out.send(cur_mes_test.encode())
+            #TODO: add exception for message 
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except:
+                traceback.print_exc()
+    
+        t1_s = int((t1_s - self.start) * res_time)
+        t2_r = int((t2_r - self.start) * res_time)
+    
+        self.offset = (t1_r - t1_s - t2_r + t2_s) / 2
+        self.delay = (t1_r - t1_s + t2_r - t2_s) / 2
+
+        return None
+        
+    def receive_data(self, time_end=100):
+        
         flag = 1
         x = list()
         times = list()
@@ -83,13 +164,14 @@ class Worker(QObject):
         temp_max = 0
         M = 0.
 
+        beg = time.time()
         while 1:
             try:                
                 ready = select.select([s], [], [], 1)
                 if (ready[0] == []):
                     self.sig_status.emit(self.__id, 0)
 
-                message, address = s.recvfrom(8192)
+                message, address = self.socket.recvfrom(8192)
                 sig_time = times[-1]
 
                 d = parse(message) #time and dictionary
@@ -99,8 +181,8 @@ class Worker(QObject):
                 
                 if flag: #start time flag
                     st = float(d['time'])
-                    temp = st
-                    print(st)                
+                    #temp = st
+                    #print(st)                
 
                 #print(d['time'])
                 
@@ -108,13 +190,13 @@ class Worker(QObject):
                 
                 d['linacc'] = [float(item) for item in d['linacc']]
 
-                emptylist.append(str(d['time']) + str( d['rotvec']))
+                #emptylist.append(str(d['time']) + str( d['rotvec']))
 
                 
 
                 diff = time.time() - beg
 
-                #emptylist.append(', '.join(el for el in numpy.concatenate([d['time'],d['acc'],d['gyr'],d['mag'],d['grav'], d['linacc'],d['rotvec'][0:4],d['rotmat'][0:3],d['rotmat'][4:7],d['rotmat'][8:11]])))
+                emptylist.append(', '.join(el for el in numpy.concatenate([d['time'],d['acc'],d['gyr'],d['mag'],d['grav'], d['linacc'],d['rotvec'][0:4],d['rotmat'][0:3],d['rotmat'][4:7],d['rotmat'][8:11]])))
 
                 linacc.append(d['linacc'])
                 if flag: #start time flag
@@ -137,10 +219,10 @@ class Worker(QObject):
                 #print(qtr)
                 self.sig_qtr.emit(self.__id,qtr)
 
-                i += 1
-                lenth = 25 #длинна окна усреденения
-                dis = 5 #5 #изменение траектории каждые 5 знчений
-                self.sig_shifts.emit(self.__id, shifts)
+                #i += 1
+                #length = 25 #длина окна усреденения
+                #dis = 5 #5 #изменение траектории каждые 5 знчений
+                #self.sig_shifts.emit(self.__id, shifts)
                 #print(len(times), " ", i)
 
                 ############################################################################################################       calculating shifts           
@@ -224,16 +306,14 @@ class Worker(QObject):
             #         self.sig_msg.emit('Worker #{} aborting work at step {}'.format(self.__id, step))
             #         break
 
-                # if diff < te:
-                #     pass
-                # else:
-                #     with open('test_sensor_data/' + str(self.port)+ str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.csv', 'a') as the_file:
-                #         the_file.write('\n'.join(el for el in emptylist))
-                #     print(str(self.port), " - stoped" )  
-                #     print(M)
-                #     #print(gist_times)
-                #     #print(times)  
-                #     break           
+                if diff >= time_end:
+                    with open('test_sensor_data/' + str(self.port)+ str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.csv', 'a') as the_file:
+                         the_file.write('\n'.join(el for el in emptylist))
+                    print(str(self.port), " - stoped" )  
+                    print(M)
+                     #print(gist_times)
+                     #print(times)  
+                    break           
     
             except (KeyboardInterrupt, SystemExit):
                 raise
