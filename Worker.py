@@ -10,6 +10,7 @@ import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
+import Camera_test as ct
 
 class Worker(QObject):
     """
@@ -26,7 +27,7 @@ class Worker(QObject):
     def __init__(self, id: int, port: int):
         super().__init__()
         self.__id = id
-        self.port = port
+        self.port = port        
         self.__abort = False
 
     @pyqtSlot()
@@ -80,7 +81,7 @@ class Worker(QObject):
         shifts = [0.,0.,0.]
         times.append(0.)
         temp_max = 0
-        M = 0.
+        M = 0.        
 
         while 1:
             try:                
@@ -223,16 +224,17 @@ class Worker(QObject):
             #         self.sig_msg.emit('Worker #{} aborting work at step {}'.format(self.__id, step))
             #         break
 
-                # if diff < te:
-                #     pass
-                # else:
-                #     with open('test_sensor_data/' + str(self.port)+ str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.csv', 'a') as the_file:
-                #         the_file.write('\n'.join(el for el in emptylist))
-                #     print(str(self.port), " - stoped" )  
-                #     print(M)
-                #     #print(gist_times)
-                #     #print(times)  
-                #     break           
+                if diff < te:
+                    pass
+                else:
+                    with open('test_sensor_data/' + str(self.port)+ str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.csv', 'a') as the_file:
+                        the_file.write('\n'.join(el for el in emptylist))
+                    print(str(self.port), " - stoped" )  
+                    #print(M)
+                    #print(gist_times)
+                    #print(times)
+                    
+                    break           
     
             except (KeyboardInterrupt, SystemExit):
                 raise
