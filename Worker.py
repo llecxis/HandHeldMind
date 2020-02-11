@@ -24,11 +24,12 @@ class Worker(QObject):
 
     
 
-    def __init__(self, id: int, port: int):
+    def __init__(self, id: int, port: int, ip: str):
         super().__init__()
         self.__id = id
         self.port = port        
         self.__abort = False
+        self.ip = ip
 
     @pyqtSlot()
     def work(self):
