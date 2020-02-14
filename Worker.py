@@ -10,6 +10,7 @@ import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
+import Camera_test as ct
 
 #import re
 #import threading
@@ -60,7 +61,7 @@ class Worker(QObject):
     def __init__(self, id: int, port: int):
         super().__init__()
         self.__id = id
-        self.port = port
+        self.port = port        
         self.__abort = False
         self.sckt_in = init_socket(self.port, SO_BIND)
         self.sckt_out = init_socket(self.port, SO_CONNECT)
@@ -162,7 +163,7 @@ class Worker(QObject):
         shifts = [0.,0.,0.]
         times.append(0.)
         temp_max = 0
-        M = 0.
+        M = 0.        
 
         beg = time.time()
         while 1:
