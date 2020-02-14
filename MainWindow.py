@@ -94,21 +94,22 @@ class MainWindow(QMainWindow):
         
         self.createMenu()
         self.createSensorsDock()  
-
+        
         self.createCentralWidget()
+        
         self.createToolBar()        
 
         self.createExplorerDock() 
         
         self.createLogDockWidget()
-
+        
         self.configureClicks()
 
         # TODO: initialize video recorder        
 
         self.log_text.append("Initialization Ok")
         #self.log_text.append()
-
+        
         self.show()
     
 
@@ -133,10 +134,14 @@ class MainWindow(QMainWindow):
         # temp_mat = np.array([[0,0,0],[0,0,0],[0,0,0]])
         # sol_mat = np.array([[0,0,0],[0,0,0],[0,0,0]])
         self.qtrs[2] = np.array([-1.0, -0.004, -0.017, 0.008])
-        self.N_arm_pos = np.array([0.95,0.,0.25,0.]) 
+        self.N_arm_pos = np.array([0.95,0.,0.25,0.])
         self.N_ref_imu = self.qtrs[2]
         self.N_arm_imu = self.qtrs[1]
         # self.log_text.append("N - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
+<<<<<<< HEAD
+=======
+
+>>>>>>> 4cc8db5f13d4af4f1d8ff193e922067faa5f53f3
         self.X_qtr = self.three_qtr_solve(self.N_arm_pos, self.qtr_inv(self.N_arm_imu), self.N_ref_imu)
         self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
         self.log_text.append('Initial = ' + str(self.three_qtr_multiplication(self.X_qtr,self.qtr_inv(self.N_arm_imu),self.N_ref_imu)))
@@ -150,7 +155,7 @@ class MainWindow(QMainWindow):
     def t_qtr_shift(self):
         self.log_text.append("T - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
         self.qtrs[2] = np.array([-1.0, -0.004, -0.017, 0.008])
-        self.T_arm_pos = np.array([-0.7,-0.7,0.,0.])#([-0.7,-0.7,0.,0.]) # [-0.7,-0.7,0.,0.]
+        self.T_arm_pos = np.array([-0.7,-0.7,0.,0.]) #([-0.7,-0.7,0.,0.]) # [-0.7,-0.7,0.,0.]
         self.N_arm_pos = np.array([0.95,0.,0.25,0.])
 
         #left_side = self.qtr_multiplication(self.qtr_inv(self.N_arm_pos), self.T_arm_pos)
@@ -286,7 +291,6 @@ class MainWindow(QMainWindow):
         buttons_layout.addWidget(self.tuning_z)
         buttons_layout.addStretch(1)
 
-
         #Create
         self.scene = Draw.vtpDrawScene()
         directory = 'geometry/'
@@ -295,13 +299,16 @@ class MainWindow(QMainWindow):
         self.ren = self.scene.initScene_qt(obj)
         self.initial_qtr_norm()
 
+        
+
         #Settings
         self.ren.SetBackground(0.2, 0.2, 0.2)
         self.timeStep = 20 #ms
         self.total_t = 0
-
+        
         #check for phones
         self.start_threads()
+        
 
         # self.controller = threads_qt.Controller()
         # self.controller.app = QCoreApplication([])       #я вообще не понимаю зачем это тут
@@ -522,9 +529,12 @@ class MainWindow(QMainWindow):
         self.shifts = []
         self.a = [0,1,2,3]
         self.video_flag_on = 0
-        port = 5555                   
+        ip = ['192.168.1.107','192.168.1.100','192.168.1.108']
+        port = 5555
+                         
         for idx in range(self.NUM_THREADS):
-            worker = Worker.Worker(idx, port)
+            
+            worker = Worker.Worker(idx, port, ip[idx])
             thread = QThread()
             thread.setObjectName('thread_' + str(idx))
             self.__threads.append((thread, worker))  # need to store worker too otherwise will be gc'd
@@ -545,7 +555,7 @@ class MainWindow(QMainWindow):
             # get read to start worker:
             # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
             thread.started.connect(worker.work) #(self.port)
-            port = port + 1
+            port = port + 2
             thread.start()  # this will emit 'started' and start thread event loop
     
     @pyqtSlot(int, list)
