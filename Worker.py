@@ -10,7 +10,7 @@ import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
-import Camera_test as ct
+#import Camera_test as ct
 
 #import re
 #import threading
@@ -43,8 +43,20 @@ def init_socket(port: int, flag, host=''):
         # TODO: add exception 
         return s
 
+    s.settimeout(1)
     return s
 
+def parse(mes):
+    mes = mes.decode("utf-8").replace(" ", "")
+    if (mes[0] == "#") :
+        print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
+        d = 1
+    else :
+        tm = mes.split("#")[0]
+        d = dict([(el.split(",")[0], el.split(",")[1:]) for el in mes.split("#")[1:]])
+        d["time"] = tm
+    
+    return d
 
 class Worker(QObject):
     """
@@ -61,22 +73,22 @@ class Worker(QObject):
     def __init__(self, id: int, port: int, ip: str):
         super().__init__()
         self.__id = id
+        self.ip = ip
         self.port = port        
         self.__abort = False
         self.sckt_in = init_socket(self.port, SO_BIND)
-        self.sckt_out = init_socket(self.port, SO_CONNECT)
+        self.sckt_out = init_socket(self.port + 1, SO_CONNECT, self.ip)
         self.start = time.time()
         self.offset = 0
         self.delay = 0
         # TODO: create ip finder
-        self.ip = ip
 
     @pyqtSlot()
     def work(self):
 
         te = 100
         
-        emptylist = list()
+        #emptylist = list()
 
         """
         Pretend this worker method does work that takes a long time. During this time, the thread's
@@ -95,7 +107,7 @@ class Worker(QObject):
         while 1:
             
             self.sync_time()
-            self.recieve_data()
+            self.receive_data()
 
     def sync_time(self):
         
@@ -164,16 +176,18 @@ class Worker(QObject):
         shifts = [0.,0.,0.]
         times.append(0.)
         temp_max = 0
-        M = 0.        
+        M = 0.     
+
+        emptylist = []   
 
         beg = time.time()
         while 1:
-            try:                
-                ready = select.select([s], [], [], 1)
+            try: 
+                ready = select.select([self.sckt_in], [], [], 1)
                 if (ready[0] == []):
                     self.sig_status.emit(self.__id, 0)
 
-                message, address = self.socket.recvfrom(8192)
+                message, address = self.sckt_in.recvfrom(8192)
                 sig_time = times[-1]
 
                 d = parse(message) #time and dictionary
@@ -194,13 +208,18 @@ class Worker(QObject):
 
                 #emptylist.append(str(d['time']) + str( d['rotvec']))
 
-                timestamp = datetime.now()
-                timestamp.microsecond = timestamp.microsecond - delay
+                timestamp = time.time()
+                timestamp = timestamp - self.delay
 
 
                 diff = time.time() - beg
 
-                emptylist.append(', '.join(el for el in numpy.concatenate([timestamp.isoformat(), d['time'],d['acc'],d['gyr'],d['mag'],d['grav'], d['linacc'],d['rotvec'][0:4],d['rotmat'][0:3],d['rotmat'][4:7],d['rotmat'][8:11]])))
+                row = [str(datetime.fromtimestamp(timestamp))] + d['time'] + d['acc'] + d['gyr'] + d['mag'] + d['grav'] + d['linacc'] + d['rotvec'] + d['rotmat'][0:3] + d['rotmat'][4:7] + d['rotmat'][8:11]
+                emptylist.append(', '.join(str(el) for el in row))
+                #self.sig_msg.emit(str([str(datetime.fromtimestamp(timestamp))] +
+                #                            d['time'] + d['acc'] + d['gyr'] + d['mag'] + d['grav'] +
+                #                            d['linacc'] + d['rotvec'] + d['rotmat'][0:3] + 
+                #                            d['rotmat'][4:7] + d['rotmat'][8:11]))
 
                 linacc.append(d['linacc'])
                 if flag: #start time flag
@@ -330,15 +349,3 @@ class Worker(QObject):
     def abort(self):
         self.sig_msg.emit('Worker #{} notified to abort'.format(self.__id))
         self.__abort = True
-
-def parse(mes):
-    mes = mes.decode("utf-8").replace(" ", "")
-    if (mes[0] == "#") :
-        print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
-        d = 1
-    else :
-        tm = mes.split("#")[0]
-        d = dict([(el.split(",")[0], el.split(",")[1:]) for el in mes.split("#")[1:]])
-        d["time"] = tm
-    
-    return d

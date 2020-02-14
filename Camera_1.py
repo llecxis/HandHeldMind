@@ -3,7 +3,7 @@
 from __future__ import print_function, division
 import numpy as np
 import cv2
-import pyaudio
+# import pyaudio
 import wave
 import threading
 import time
@@ -62,57 +62,57 @@ class VideoRecorder():
         video_thread_1 = threading.Thread(target=self.record)
         video_thread_1.start()
 
-class AudioRecorder():
-    "Audio class based on pyAudio and Wave"
-    def __init__(self, filename="temp_audio.wav", rate=44100, fpb=1024, channels=2):
-        self.open = True
-        self.rate = rate
-        self.frames_per_buffer = fpb
-        self.channels = channels
-        self.format = pyaudio.paInt16
-        self.audio_filename = filename
-        self.audio = pyaudio.PyAudio()
-        self.stream = self.audio.open(format=self.format,
-                                      channels=self.channels,
-                                      rate=self.rate,
-                                      input=True,
-                                      frames_per_buffer = self.frames_per_buffer)
-        self.audio_frames = []
-
-    def record(self):
-        "Audio starts being recorded"
-        self.stream.start_stream()
-        while self.open:
-            data = self.stream.read(self.frames_per_buffer) 
-            self.audio_frames.append(data)
-            if not self.open:
-                break
-
-    def stop(self):
-        "Finishes the audio recording therefore the thread too"
-        if self.open:
-            self.open = False
-            self.stream.stop_stream()
-            self.stream.close()
-            self.audio.terminate()
-            waveFile = wave.open(self.audio_filename, 'wb')
-            waveFile.setnchannels(self.channels)
-            waveFile.setsampwidth(self.audio.get_sample_size(self.format))
-            waveFile.setframerate(self.rate)
-            waveFile.writeframes(b''.join(self.audio_frames))
-            waveFile.close()
-
-    def start(self):
-        "Launches the audio recording function using a thread"
-        audio_thread_1 = threading.Thread(target=self.record)
-        audio_thread_1.start()
+#class AudioRecorder():
+#    "Audio class based on pyAudio and Wave"
+#    def __init__(self, filename="temp_audio.wav", rate=44100, fpb=1024, channels=2):
+#        self.open = True
+#        self.rate = rate
+#        self.frames_per_buffer = fpb
+#        self.channels = channels
+#        self.format = pyaudio.paInt16
+#        self.audio_filename = filename
+#        self.audio = pyaudio.PyAudio()
+#        self.stream = self.audio.open(format=self.format,
+#                                      channels=self.channels,
+#                                      rate=self.rate,
+#                                      input=True,
+#                                      frames_per_buffer = self.frames_per_buffer)
+#        self.audio_frames = []
+#
+#    def record(self):
+#        "Audio starts being recorded"
+#        self.stream.start_stream()
+#        while self.open:
+#            data = self.stream.read(self.frames_per_buffer) 
+#            self.audio_frames.append(data)
+#            if not self.open:
+#                break
+#
+#    def stop(self):
+#        "Finishes the audio recording therefore the thread too"
+#        if self.open:
+#            self.open = False
+#            self.stream.stop_stream()
+#            self.stream.close()
+#            self.audio.terminate()
+#            waveFile = wave.open(self.audio_filename, 'wb')
+#            waveFile.setnchannels(self.channels)
+#            waveFile.setsampwidth(self.audio.get_sample_size(self.format))
+#            waveFile.setframerate(self.rate)
+#            waveFile.writeframes(b''.join(self.audio_frames))
+#            waveFile.close()
+#
+#    def start(self):
+#        "Launches the audio recording function using a thread"
+#        audio_thread_1 = threading.Thread(target=self.record)
+#        audio_thread_1.start()
 
 def start_AVrecording(filename="test"):
     global video_thread_1
-    global audio_thread_1
+    # global audio_thread_1
     video_thread_1 = VideoRecorder()
-    audio_thread_1 = AudioRecorder()
-    audio_thread_1.start()
+    # audio_thread_1 = AudioRecorder()
+    # audio_thread_1.start()
     video_thread_1.start()
     return filename
 
@@ -122,14 +122,14 @@ def start_video_recording(filename="test"):
     video_thread_1.start()
     return filename
 
-def start_audio_recording(filename="test"):
-    global audio_thread_1
-    audio_thread_1 = AudioRecorder()
-    audio_thread_1.start()
-    return filename
+# def start_audio_recording(filename="test"):
+#     global audio_thread_1
+#     audio_thread_1 = AudioRecorder()
+#     audio_thread_1.start()
+#     return filename
 
 def stop_AVrecording(filename="test"):
-    audio_thread_1.stop() 
+    # audio_thread_1.stop() 
     frame_counts = video_thread_1.frame_counts
     elapsed_time = time.time() - video_thread_1.start_time
     recorded_fps = frame_counts / elapsed_time

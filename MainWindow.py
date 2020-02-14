@@ -94,15 +94,15 @@ class MainWindow(QMainWindow):
         
         self.createMenu()
         self.createSensorsDock()  
-        
-        self.createCentralWidget()
-        
-        self.createToolBar()        
 
-        self.createExplorerDock() 
+        self.createToolBar()  
+
+        self.createExplorerDock()     
         
         self.createLogDockWidget()
         
+        self.createCentralWidget()  
+
         self.configureClicks()
 
         # TODO: initialize video recorder        
@@ -138,10 +138,6 @@ class MainWindow(QMainWindow):
         self.N_ref_imu = self.qtrs[2]
         self.N_arm_imu = self.qtrs[1]
         # self.log_text.append("N - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
-<<<<<<< HEAD
-=======
-
->>>>>>> 4cc8db5f13d4af4f1d8ff193e922067faa5f53f3
         self.X_qtr = self.three_qtr_solve(self.N_arm_pos, self.qtr_inv(self.N_arm_imu), self.N_ref_imu)
         self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
         self.log_text.append('Initial = ' + str(self.three_qtr_multiplication(self.X_qtr,self.qtr_inv(self.N_arm_imu),self.N_ref_imu)))
@@ -529,7 +525,7 @@ class MainWindow(QMainWindow):
         self.shifts = []
         self.a = [0,1,2,3]
         self.video_flag_on = 0
-        ip = ['192.168.1.107','192.168.1.100','192.168.1.108']
+        ip = ['192.168.1.105','192.168.1.101','192.168.1.108']
         port = 5555
                          
         for idx in range(self.NUM_THREADS):
@@ -547,7 +543,7 @@ class MainWindow(QMainWindow):
             worker.sig_shifts.connect(self.on_worker_shifts)
             worker.sig_qtr.connect(self.on_worker_qtr)
             worker.sig_status.connect(self.on_worker_status)
-            # worker.sig_msg.connect(self.log_text.append)
+            worker.sig_msg.connect(self.log_text.append)
 
             # control worker:
             self.sig_abort_workers.connect(worker.abort)
@@ -584,7 +580,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(int, int)
     def on_worker_status(self, worker_id: int, flag: int):
-        # self.log.append('worker #{} done'.format(worker_id))
+        #self.log_text.append('worker #{} done'.format(worker_id))
         # self.progress.append('-- Worker {} DONE'.format(worker_id))
         if (self.stat[worker_id] == flag):
             pass
