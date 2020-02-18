@@ -194,12 +194,11 @@ class Worker(QObject):
 
                 diff = time.time() - beg
 
-                row = [str(datetime.fromtimestamp(timestamp))] + d['time'] + d['acc'] + d['gyr'] + d['mag'] + d['grav'] + d['linacc'] + d['rotvec'] + d['rotmat'][0:3] + d['rotmat'][4:7] + d['rotmat'][8:11]
+                row = [str(datetime.fromtimestamp(timestamp))] + d['time'] + d['acc'] + d['gyr'] + d['mag'] + d['grav'] + d['linacc'] + d['rotvec']
                 emptylist.append(', '.join(str(el) for el in row))
                 #self.sig_msg.emit(str([str(datetime.fromtimestamp(timestamp))] +
                 #                            d['time'] + d['acc'] + d['gyr'] + d['mag'] + d['grav'] +
-                #                            d['linacc'] + d['rotvec'] + d['rotmat'][0:3] + 
-                #                            d['rotmat'][4:7] + d['rotmat'][8:11]))
+                #                            d['linacc'] + d['rotvec']))
 
                 linacc.append(d['linacc'])
                 if flag: #start time flag
@@ -300,7 +299,6 @@ class Worker(QObject):
 
             #     # times.append(d['time'])
             #     # linacc.append([float(item) for item in d['linacc'] ])
-            #     # rotmat.append( [[float(item) for item in d['rotmat'][0:3]], [float(item) for item in d['rotmat'][4:7]], [float(item) for item in d['rotmat'][8:11]]] )
 
             #         # check if we need to abort the loop; need to process events to receive signals;
             #     App.processEvents()  # this could cause change to self.__abort
