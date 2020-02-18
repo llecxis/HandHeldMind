@@ -23,28 +23,8 @@ import select
 
 from datetime import datetime
 
+import network
 
-
-SO_BIND = 0
-SO_CONNECT = 1
-
-
-def init_socket(port: int, flag, host=''):
-
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    if flag == SO_BIND:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        s.bind((host, port))
-    elif flag == SO_CONNECT:
-        s.connect((host, port))
-    else:
-        # TODO: add exception 
-        return s
-
-    s.settimeout(1)
-    return s
 
 def parse(mes):
     mes = mes.decode("utf-8").replace(" ", "")
@@ -76,8 +56,8 @@ class Worker(QObject):
         self.ip = ip
         self.port = port        
         self.__abort = False
-        self.sckt_in = init_socket(self.port, SO_BIND)
-        self.sckt_out = init_socket(self.port + 1, SO_CONNECT, self.ip)
+        self.sckt_in = network.init_socket(self.port, network.SO_BIND)
+        self.sckt_out = network.init_socket(self.port + 1, network.SO_CONNECT, self.ip)
         self.start = time.time()
         self.offset = 0
         self.delay = 0
