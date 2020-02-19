@@ -32,9 +32,17 @@ def parse(mes):
         print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
         d = 1
     else :
-        tm = mes.split("#")[0]
-        d = dict([(el.split(",")[0], el.split(",")[1:]) for el in mes.split("#")[1:]])
-        d["time"] = tm
+        d = {}
+        idx = mes.split("#")[0]
+        d["id"] = idx
+        for measure in mes.split("#")[1:]:
+            values = measure.split(",")
+            if len(values) == 1:
+                d[measure] = None
+            elif len(values) == 2:
+                d[values[0]] = values[1]
+            else:
+                d[values[0]] = values[1:]
     
     return d
 
@@ -50,11 +58,12 @@ class Worker(QObject):
 
     
 
-    def __init__(self, id: int, port: int, ip: str):
+    def __init__(self, id: int, port: int, ip: str, file_prefix='test_sensor_data/'):
         super().__init__()
         self.__id = id
         self.ip = ip
-        self.port = port        
+        self.port = port   
+        self.file_prefix = file_prefix     
         self.__abort = False
         self.sckt_in = network.init_socket(self.port, network.SO_BIND)
         self.sckt_out = network.init_socket(self.port + 1, network.SO_CONNECT, self.ip)
@@ -87,7 +96,13 @@ class Worker(QObject):
         while 1:
             
             self.sync_time()
-            self.receive_data()
+
+            dt = datetime.now()
+            filename = self.file_prefix + str(self.port)+ dt.isoformat(timespec='seconds') + '.csv'
+            with open(filename, 'a') as the_file:
+                the_file.write('#id, time, calib_status, lin_acc, rot_vec, gyr, acc, grav, mag\n')
+            
+            self.receive_data(filename)
 
     def sync_time(self):
         
@@ -140,7 +155,7 @@ class Worker(QObject):
 
         return None
         
-    def receive_data(self, time_end=100):
+    def receive_data(self, filename, time_end=100):
         
         flag = 1
         x = list()
@@ -182,9 +197,18 @@ class Worker(QObject):
 
                 #print(d['time'])
                 
-                d['time'] = [round(float(d['time']) - st,6)]
+                d['time'] = round(float(d['time']) - st,6)
+                d['calib_status'] = hex(int(d['calib_status'])).lstrip('0x').zfill(4)
+
+                data_row = []
+                for column in d.keys():
+                    if isinstance(d[column], list):
+                        for value in d[column]:
+                            data_row.append(value)
+                    else:
+                        data_row.append(d[column])
                 
-                d['linacc'] = [float(item) for item in d['linacc']]
+                #d['linacc'] = [float(item) for item in d['linacc']]
 
                 #emptylist.append(str(d['time']) + str( d['rotvec']))
 
@@ -194,7 +218,7 @@ class Worker(QObject):
 
                 diff = time.time() - beg
 
-                row = [str(datetime.fromtimestamp(timestamp))] + d['time'] + d['acc'] + d['gyr'] + d['mag'] + d['grav'] + d['linacc'] + d['rotvec']
+                row = [str(datetime.fromtimestamp(timestamp))] + data_row
                 emptylist.append(', '.join(str(el) for el in row))
                 #self.sig_msg.emit(str([str(datetime.fromtimestamp(timestamp))] +
                 #                            d['time'] + d['acc'] + d['gyr'] + d['mag'] + d['grav'] +
@@ -206,7 +230,7 @@ class Worker(QObject):
                     flag = 0
                 else:
                     times.append(d['time'])
-                    temp_max = times[-1][0] - times[-2][0]
+                    temp_max = times[-1] - times[-2]
                     gist_times.append(temp_max)
 
                 if temp_max > M:
@@ -309,7 +333,7 @@ class Worker(QObject):
 
                 if diff >= time_end:
                     dt = datetime.now()
-                    with open('test_sensor_data/' + str(self.port)+ dt.isoformat(timespec='seconds') + '.csv', 'a') as the_file:
+                    with open(filename, 'a') as the_file:
                          the_file.write('\n'.join(el for el in emptylist))
                     #print(str(self.port), " - stopped" )  
                     #print(M)

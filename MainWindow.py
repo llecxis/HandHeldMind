@@ -6,7 +6,7 @@ from PyQt5.QtCore import *
 import vtk
 #import math
 import numpy as np
-#import time
+import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
@@ -525,7 +525,7 @@ class MainWindow(QMainWindow):
         self.shifts = []
         self.a = [0,1,2,3]
         self.video_flag_on = 0
-        ip = ['192.168.1.105','192.168.1.101','192.168.1.108']
+        ip = ['192.168.1.112','192.168.1.8','192.168.1.9']
         port = 5555
                          
         for idx in range(self.NUM_THREADS):
