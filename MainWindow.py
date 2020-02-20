@@ -19,6 +19,7 @@ import Worker
 import Draw
 import Camera_1 as Ca1
 import Camera_2 as Ca2
+import network
 
 def trap_exc_during_debug(*args):
     # when app raises uncaught exception, print info
@@ -78,7 +79,7 @@ def NextSet(self, n):                #операция перестановки
 class MainWindow(QMainWindow):   
 
     NUM_THREADS = 3 # number of phones
-    sig_abort_workers = pyqtSignal()
+    sig_abort = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -525,35 +526,89 @@ class MainWindow(QMainWindow):
         self.shifts = []
         self.a = [0,1,2,3]
         self.video_flag_on = 0
-        ip = ['192.168.1.112','192.168.1.8','192.168.1.9']
-        port = 5555
+        
+        broadcaster = network.Broadcaster()
+        thread = QThread()
+        thread.setObjectName('thread_' + 0)
+        self.__threads.append((thread, broadcaster))  # need to store worker too otherwise will be gc'd
+        self.__threadsstatus.append(self.network_stat) #нужно продумать как именно добавлять статусы многопоточности в виджите
+        brodcaster.moveToThread(thread)
+
+        broadcaster.sig_status.connect(self.on_broadcaster_status)
+        broadcaster.sig_msg.connect(self.log_text.append)
+
+        # control worker:
+         self.sig_abort.connect(broadcaster.abort)
+
+        # get read to start worker:
+        # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
+        thread.started.connect(broadcaster.work) #(self.port)
+        thread.start()
+
+        # ip = ['192.168.1.112','192.168.1.8','192.168.1.9']
+        # port = 5555
                          
-        for idx in range(self.NUM_THREADS):
+        # for idx in range(self.NUM_THREADS):
             
-            worker = Worker.Worker(idx, port, ip[idx])
-            thread = QThread()
-            thread.setObjectName('thread_' + str(idx))
-            self.__threads.append((thread, worker))  # need to store worker too otherwise will be gc'd
-            self.__threadsstatus.append(self.sensor_im_1) #нужно продумать как именно добавлять статусы многопоточности в виджите
-            self.stat.append(-1)
-            self.qtrs.append([1.,0.,0.,0.])
-            self.shifts.append([0.,0.,0.])
-            worker.moveToThread(thread)
+        #     worker = Worker.Worker(idx, port, ip[idx])
+        #     thread = QThread()
+        #     thread.setObjectName('thread_' + str(idx))
+        #     self.__threads.append((thread, worker))  # need to store worker too otherwise will be gc'd
+        #     self.__threadsstatus.append(self.sensor_im_1) #нужно продумать как именно добавлять статусы многопоточности в виджите
+        #     self.stat.append(-1)
+        #     self.qtrs.append([1.,0.,0.,0.])
+        #     self.shifts.append([0.,0.,0.])
+        #     worker.moveToThread(thread)
 
-            worker.sig_shifts.connect(self.on_worker_shifts)
-            worker.sig_qtr.connect(self.on_worker_qtr)
-            worker.sig_status.connect(self.on_worker_status)
-            worker.sig_msg.connect(self.log_text.append)
+        #     worker.sig_shifts.connect(self.on_worker_shifts)
+        #     worker.sig_qtr.connect(self.on_worker_qtr)
+        #     worker.sig_status.connect(self.on_worker_status)
+        #     worker.sig_msg.connect(self.log_text.append)
 
-            # control worker:
-            self.sig_abort_workers.connect(worker.abort)
+        #     # control worker:
+        #     self.sig_abort.connect(worker.abort)
 
-            # get read to start worker:
-            # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
-            thread.started.connect(worker.work) #(self.port)
-            port = port + 2
-            thread.start()  # this will emit 'started' and start thread event loop
+        #     # get read to start worker:
+        #     # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
+        #     thread.started.connect(worker.work) #(self.port)
+        #     port = port + 2
+        #     thread.start()  # this will emit 'started' and start thread event loop
     
+    @pyqtSlot(int)
+    def on_broadcaster_status(self, flag: int, port: int, ip: str):
+
+        if flag == 1:
+            if self.num_workers < self.NUM_THREADS:
+                start_worker(self.num_workers, port, ip)
+                self.num_workers += 1
+            else:
+                pass
+
+    def start_worker(self, idx, port, ip):
+            
+        worker = Worker.Worker(idx, port, ip)
+        thread = QThread()
+        thread.setObjectName('thread_' + str(idx + 1))
+        self.__threads.append((thread, worker))  # need to store worker too otherwise will be gc'd
+        self.__threadsstatus.append(self.sensor_im_1) #нужно продумать как именно добавлять статусы многопоточности в виджите
+        self.stat.append(-1)
+        self.qtrs.append([1.,0.,0.,0.])
+        self.shifts.append([0.,0.,0.])
+        worker.moveToThread(thread)
+
+        worker.sig_shifts.connect(self.on_worker_shifts)
+        worker.sig_qtr.connect(self.on_worker_qtr)
+        worker.sig_status.connect(self.on_worker_status)
+        worker.sig_msg.connect(self.log_text.append)
+
+        # control worker:
+        self.sig_abort.connect(worker.abort)
+
+        # get read to start worker:
+        # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
+        thread.started.connect(worker.work) #(self.port)
+        thread.start() 
+
     @pyqtSlot(int, list)
     def on_worker_shifts(self, worker_id: int, data: list):
         # self.log_text.append('Worker #{}: {}'.format(worker_id, data))
@@ -601,10 +656,10 @@ class MainWindow(QMainWindow):
             # self.__threads = None
 
     @pyqtSlot()
-    def abort_workers(self):
-        self.sig_abort_workers.emit()
+    def abort(self):
+        self.sig_abort.emit()
         # self.log.append('Asking each worker to abort')
-        for thread, worker in self.__threads:  # note nice unpacking by Python, avoids indexing
+        for thread, task in self.__threads:  # note nice unpacking by Python, avoids indexing
             thread.quit()  # this will quit **as soon as thread event loop unblocks**
             thread.wait()  # <- so you need to wait for it to *actually* quit
 
