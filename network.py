@@ -50,7 +50,8 @@ class Broadcaster(QObject):
             self.sckt.sendto(self.msg, self.dest)
             try:
                 msg_device, address = self.sckt.recvfrom(8192)
-                print(address)
+                port = msg_device.split('#')[1]
+                #print(address)
                 if msg_device[:len(self.msg)] == self.msg:
                     self.sig_status(1, port, address)
             except socket.timeout:
