@@ -21,27 +21,13 @@ import Camera_1 as Ca1
 import Camera_2 as Ca2
 import network
 
-def trap_exc_during_debug(*args):
-    # when app raises uncaught exception, print info
-    print(args)
+from utils import trap_exc_during_debug
 
 def get_files(directory):
     files = os.listdir(directory)
     for i in range(0,len(files)):
         files[i] = directory + files[i]
     return files
-
-def parse(mes):
-    mes = mes.decode("utf-8").replace(" ", "")
-    if (mes[0] == "#") :
-        print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
-        d = 1
-    else :
-        tm = mes.split("#")[0]
-        d = dict([(el.split(",")[0], el.split(",")[1:]) for el in mes.split("#")[1:]])
-        d["time"] = tm
-    
-    return d
 
 def integ(x, tck, constant = 10e-9):
     x = np.atleast_1d(x)
@@ -529,21 +515,22 @@ class MainWindow(QMainWindow):
         
         broadcaster = network.Broadcaster()
         thread = QThread()
-        thread.setObjectName('thread_' + 0)
+        thread.setObjectName('thread_' + str(0))
         self.__threads.append((thread, broadcaster))  # need to store worker too otherwise will be gc'd
-        self.__threadsstatus.append(self.network_stat) #нужно продумать как именно добавлять статусы многопоточности в виджите
-        brodcaster.moveToThread(thread)
+        #self.__threadsstatus.append(self.network_stat) #нужно продумать как именно добавлять статусы многопоточности в виджите
+        broadcaster.moveToThread(thread)
 
         broadcaster.sig_status.connect(self.on_broadcaster_status)
         broadcaster.sig_msg.connect(self.log_text.append)
 
         # control worker:
-         self.sig_abort.connect(broadcaster.abort)
+        self.sig_abort.connect(broadcaster.abort)
 
         # get read to start worker:
         # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
         thread.started.connect(broadcaster.work) #(self.port)
         thread.start()
+        self.log_text.append("Broadcaster started")
 
         # ip = ['192.168.1.112','192.168.1.8','192.168.1.9']
         # port = 5555
