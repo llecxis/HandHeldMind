@@ -74,6 +74,8 @@ class MainWindow(QMainWindow):
         self.left = 500
         self.width = 1000
         self.height = 800
+
+        self.num_workers = 0
         
         self.setWindowIcon(QtGui.QIcon("icon.png"))
         self.setWindowTitle(self.title)
@@ -560,13 +562,13 @@ class MainWindow(QMainWindow):
         #     thread.started.connect(worker.work) #(self.port)
         #     port = port + 2
         #     thread.start()  # this will emit 'started' and start thread event loop
-    
-    @pyqtSlot(int)
+
+    @pyqtSlot(int, int, str)
     def on_broadcaster_status(self, flag: int, port: int, ip: str):
 
         if flag == 1:
             if self.num_workers < self.NUM_THREADS:
-                start_worker(self.num_workers, port, ip)
+                self.start_worker(self.num_workers, port, ip)
                 self.num_workers += 1
             else:
                 pass
@@ -582,7 +584,7 @@ class MainWindow(QMainWindow):
         self.qtrs.append([1.,0.,0.,0.])
         self.shifts.append([0.,0.,0.])
         worker.moveToThread(thread)
-
+        
         worker.sig_shifts.connect(self.on_worker_shifts)
         worker.sig_qtr.connect(self.on_worker_qtr)
         worker.sig_status.connect(self.on_worker_status)
@@ -594,7 +596,9 @@ class MainWindow(QMainWindow):
         # get read to start worker:
         # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
         thread.started.connect(worker.work) #(self.port)
-        thread.start() 
+        thread.start()
+
+        self.log_text.append('Worker #' + str(idx) + ' started.') 
 
     @pyqtSlot(int, list)
     def on_worker_shifts(self, worker_id: int, data: list):

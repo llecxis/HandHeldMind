@@ -2,6 +2,7 @@
 
 import socket
 from PyQt5 import QtCore
+import time
 
 SO_BIND = 0
 SO_CONNECT = 1
@@ -43,28 +44,38 @@ class Broadcaster(QtCore.QObject):
         self.__abort = False
         self.sckt = init_socket(self.port, SO_BROADCAST)
         #self.sckt_bc = init_socket(self.port, SO_BROADCAST)
-        #self.sckt_in = init_socket(self.port, SO_BIND)
-        self.msg = socket.gethostbyname(socket.gethostname())
+        #self.sckt_in = init_socket(self.port + 1, SO_BIND)
+        self.msg = "BNO Tracker broadcasting"
         self.dest = ('<broadcast>', self.port)
+        # TODO: print broadcasting messages when no devices connected
+        self.found_devices = False
 
     def work(self):
 
+        #self.sig_status.emit(1, 5555, '192.168.1.108')
+        self.sckt.sendto(self.msg.encode(), self.dest)
+        self.sig_msg.emit("Message sent: " + self.msg)
+
         while 1:
-            self.sckt.sendto(self.msg, self.dest)
-            self.sig_msg.emit("Message sent:", self.msg)
             try:
                 msg_device, address = self.sckt.recvfrom(8192)
-                port = msg_device.split('#')[1]
-                print(address)
-                if msg_device[:len(self.msg)] == self.msg:
-                    self.sig_status.emit(1, port, address)
+                #print(type(address[0]))
+                if msg_device.decode()[:len(self.msg)] == self.msg:
+                    port = int(msg_device.decode().split('#')[1]) if '#' in msg_device.decode() else 0000
+                    if port != 0000:
+                        self.found_devices = True
+                        self.sig_msg.emit("Connected to " + address[0] + ":" + str(port))
+                        self.sig_status.emit(1, port, address[0])
             except socket.timeout:
-                self.sckt.sendto(self.msg, self.dest)
-                self.sig_msg.emit("Message resent:", self.msg)
-            except:
+                    self.sckt.sendto(self.msg.encode(), self.dest)
+                    if not self.found_devices:
+                        self.sig_msg.emit("Broadcasting devices...")
+            except Exception as e:
+                print("Unexpected error: ", e)
                 pass
 
             #time.sleep(1)
+        
 
     def abort(self):
         self.sig_msg.emit('Broadcaster notified to abort')

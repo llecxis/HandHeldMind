@@ -31,7 +31,7 @@ import network
 def parse(mes):
     mes = mes.decode("utf-8").replace(" ", "")
     if (mes[0] == "#") :
-        print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
+        #print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
         d = 1
     else :
         d = {}
@@ -154,8 +154,6 @@ class Worker(QObject):
     
         self.offset = round((t1_r - t1_s - t2_r + t2_s) / 2)
         self.delay = round((t1_r - t1_s + t2_r - t2_s) / 2)
-
-        return None
         
     def receive_data(self, filename, time_end=100):
         
