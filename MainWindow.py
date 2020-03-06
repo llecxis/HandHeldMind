@@ -10,7 +10,7 @@ import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
-import Worker_lecxis as Worker
+import Worker_val as Worker
 import Draw
 import QtrCalc as QC
 # import Camera_1 as Ca1
@@ -772,6 +772,9 @@ class MainWindow(QMainWindow):
         #self.sig_abort_workers.emit()
         # self.log.append('Asking each worker to abort')
         for thread, Worker in self.__threads:  # note nice unpacking by Python, avoids indexing
+            thread.quit()  # this will quit **as soon as thread event loop unblocks**
+            thread.wait()  # <- so you need to wait for it to *actually* quit
+            
     def abort(self):
         self.sig_abort.emit()
         # self.log.append('Asking each worker to abort')
