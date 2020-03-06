@@ -1,4 +1,4 @@
-import math
+#import math
 import numpy as np
 
 # def qtr_calculus(self,i_from_actor,i_to_actor): 

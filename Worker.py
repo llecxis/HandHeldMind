@@ -1,16 +1,52 @@
+#message processing module
+
 import sys
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import vtk
-import math
+#import math
 import numpy as np
 import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
-import Camera_test as ct
+#import Camera_test as ct
+
+#import re
+#import threading
+#import skinematics as skin
+#import matplotlib.pyplot as plt
+import select
+#import vector
+#from scipy import interpolate
+#from scipy.signal import savgol_filter
+
+from datetime import datetime
+
+import network
+
+
+def parse(mes):
+    mes = mes.decode("utf-8").replace(" ", "")
+    if (mes[0] == "#") :
+        #print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
+        d = 1
+    else :
+        d = {}
+        idx = mes.split("#")[0]
+        d["id"] = idx
+        for measure in mes.split("#")[1:]:
+            values = measure.split(",")
+            if len(values) == 1:
+                d[measure] = None
+            elif len(values) == 2:
+                d[values[0]] = values[1]
+            else:
+                d[values[0]] = values[1:]
+    
+    return d
 
 class Worker(QObject):
     """
@@ -24,28 +60,26 @@ class Worker(QObject):
 
     
 
-    def __init__(self, id: int, port: int, ip: str):
+    def __init__(self, id: int, port: int, ip: str, file_prefix='test_sensor_data/'):
         super().__init__()
         self.__id = id
-        self.port = port        
-        self.__abort = False
         self.ip = ip
+        self.port = port   
+        self.file_prefix = file_prefix     
+        self.__abort = False
+        self.sckt_in = network.init_socket(self.port, network.SO_BIND)
+        self.sckt_out = network.init_socket(self.port + 1, network.SO_CONNECT, self.ip)
+        self.start = time.time()
+        self.offset = 0
+        self.delay = 0
+        # TODO: create ip finder
 
     @pyqtSlot()
     def work(self):
 
-        import sys
-        import socket, traceback, re, math, threading, time, random, numpy
-        import skinematics as skin
-        import matplotlib.pyplot as plt
-        import select
-        import numpy as np
-        import vector
-        from scipy import interpolate
-        from scipy.signal import savgol_filter
         te = 100
         
-        emptylist = list()
+        #emptylist = list()
 
         """
         Pretend this worker method does work that takes a long time. During this time, the thread's
@@ -60,14 +94,69 @@ class Worker(QObject):
         # for step in range(100):
         #     time.sleep(0.1)
         ##################################################
-        host = ''
 
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        s.bind((host, self.port))
+        while 1:
+            
+            self.sync_time()
 
-        beg = time.time()
+            dt = datetime.now()
+            filename = self.file_prefix + str(self.port)+ dt.isoformat(timespec='seconds') + '.csv'
+            with open(filename, 'a') as the_file:
+                the_file.write('#id, time, calib_status, lin_acc, rot_vec, gyr, acc, grav, mag\n')
+            
+            self.receive_data(filename)
+
+    def sync_time(self):
+        
+        res_time=1000000
+
+        mes_test = 'time'
+        message = ''
+        t1_s = time.time()
+        str_ms = str((t1_s - self.start)*res_time).split('.')[0]
+        cur_mes_test = mes_test + ',' + str_ms
+    
+        self.sckt_out.send(cur_mes_test.encode())
+
+        while 1:
+            try:
+                if message[:len(mes_test)] == mes_test:
+                    
+                    t1_r = int(message.split(',')[2])
+                    t2_s = int(message.split(',')[3])
+                    str_ms = str((t2_r - self.start)*res_time).split('.')[0]
+                    cur_mes_test = message + ',' + str_ms
+                    
+                    time.sleep(0.01)
+                    t3_s = time.time()
+                    str_ms = str((t3_s - self.start)*res_time).split('.')[0]
+                    cur_mes_test = message + ',' + str_ms
+                    self.sckt_out.send(cur_mes_test.encode())
+                    break
+                else:
+                    mes, address = self.sckt_out.recvfrom(8192)
+                    message = mes.decode()
+                    t2_r = time.time()
+                
+            except socket.timeout:
+                t1_s = time.time()
+                str_ms = str((t1_s - self.start)*res_time).split('.')[0]
+                cur_mes_test = mes_test + ',' + str_ms
+                self.sckt_out.send(cur_mes_test.encode())
+            #TODO: add exception for message 
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except:
+                traceback.print_exc()
+    
+        t1_s = int((t1_s - self.start) * res_time)
+        t2_r = int((t2_r - self.start) * res_time)
+    
+        self.offset = round((t1_r - t1_s - t2_r + t2_s) / 2)
+        self.delay = round((t1_r - t1_s + t2_r - t2_s) / 2)
+        
+    def receive_data(self, filename, time_end=100):
+        
         flag = 1
         x = list()
         times = list()
@@ -82,15 +171,18 @@ class Worker(QObject):
         shifts = [0.,0.,0.]
         times.append(0.)
         temp_max = 0
-        M = 0.        
+        M = 0.     
 
+        emptylist = []   
+
+        beg = time.time()
         while 1:
-            try:                
-                ready = select.select([s], [], [], 1)
+            try: 
+                ready = select.select([self.sckt_in], [], [], 1)
                 if (ready[0] == []):
                     self.sig_status.emit(self.__id, 0)
 
-                message, address = s.recvfrom(8192)
+                message, address = self.sckt_in.recvfrom(8192)
                 sig_time = times[-1]
 
                 d = parse(message) #time and dictionary
@@ -100,22 +192,37 @@ class Worker(QObject):
                 
                 if flag: #start time flag
                     st = float(d['time'])
-                    temp = st
-                    print(st)                
+                    #temp = st
+                    #print(st)                
 
                 #print(d['time'])
                 
-                d['time'] = [round(float(d['time']) - st,6)]
-                
-                d['linacc'] = [float(item) for item in d['linacc']]
+                d['time'] = round(float(d['time']) - st,6)
+                d['calib_status'] = hex(int(d['calib_status'])).lstrip('0x').zfill(4)
 
-                emptylist.append(str(d['time']) + str( d['rotvec']))
-
+                data_row = []
+                for column in d.keys():
+                    if isinstance(d[column], list):
+                        for value in d[column]:
+                            data_row.append(value)
+                    else:
+                        data_row.append(d[column])
                 
+                #d['linacc'] = [float(item) for item in d['linacc']]
+
+                #emptylist.append(str(d['time']) + str( d['rotvec']))
+
+                timestamp = time.time()
+                timestamp = timestamp - self.delay
+
 
                 diff = time.time() - beg
 
-                #emptylist.append(', '.join(el for el in numpy.concatenate([d['time'],d['acc'],d['gyr'],d['mag'],d['grav'], d['linacc'],d['rotvec'][0:4],d['rotmat'][0:3],d['rotmat'][4:7],d['rotmat'][8:11]])))
+                row = [str(datetime.fromtimestamp(timestamp))] + data_row
+                emptylist.append(', '.join(str(el) for el in row))
+                #self.sig_msg.emit(str([str(datetime.fromtimestamp(timestamp))] +
+                #                            d['time'] + d['acc'] + d['gyr'] + d['mag'] + d['grav'] +
+                #                            d['linacc'] + d['rotvec']))
 
                 linacc.append(d['linacc'])
                 if flag: #start time flag
@@ -123,7 +230,7 @@ class Worker(QObject):
                     flag = 0
                 else:
                     times.append(d['time'])
-                    temp_max = times[-1][0] - times[-2][0]
+                    temp_max = times[-1] - times[-2]
                     gist_times.append(temp_max)
 
                 if temp_max > M:
@@ -138,10 +245,10 @@ class Worker(QObject):
                 #print(qtr)
                 self.sig_qtr.emit(self.__id,qtr)
 
-                i += 1
-                lenth = 25 #длинна окна усреденения
-                dis = 5 #5 #изменение траектории каждые 5 знчений
-                self.sig_shifts.emit(self.__id, shifts)
+                #i += 1
+                #length = 25 #длина окна усреденения
+                #dis = 5 #5 #изменение траектории каждые 5 знчений
+                #self.sig_shifts.emit(self.__id, shifts)
                 #print(len(times), " ", i)
 
                 ############################################################################################################       calculating shifts           
@@ -216,7 +323,6 @@ class Worker(QObject):
 
             #     # times.append(d['time'])
             #     # linacc.append([float(item) for item in d['linacc'] ])
-            #     # rotmat.append( [[float(item) for item in d['rotmat'][0:3]], [float(item) for item in d['rotmat'][4:7]], [float(item) for item in d['rotmat'][8:11]]] )
 
             #         # check if we need to abort the loop; need to process events to receive signals;
             #     App.processEvents()  # this could cause change to self.__abort
@@ -225,16 +331,14 @@ class Worker(QObject):
             #         self.sig_msg.emit('Worker #{} aborting work at step {}'.format(self.__id, step))
             #         break
 
-                if diff < te:
-                    pass
-                else:
-                    with open('test_sensor_data/' + str(self.port)+ str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.csv', 'a') as the_file:
-                        the_file.write('\n'.join(el for el in emptylist))
-                    print(str(self.port), " - stoped" )  
+                if diff >= time_end:
+                    dt = datetime.now()
+                    with open(filename, 'a') as the_file:
+                         the_file.write('\n'.join(el for el in emptylist))
+                    #print(str(self.port), " - stopped" )  
                     #print(M)
-                    #print(gist_times)
-                    #print(times)
-                    
+                     #print(gist_times)
+                     #print(times)  
                     break           
     
             except (KeyboardInterrupt, SystemExit):
@@ -247,15 +351,3 @@ class Worker(QObject):
     def abort(self):
         self.sig_msg.emit('Worker #{} notified to abort'.format(self.__id))
         self.__abort = True
-
-def parse(mes):
-    mes = mes.decode("utf-8").replace(" ", "")
-    if (mes[0] == "#") :
-        print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
-        d = 1
-    else :
-        tm = mes.split("#")[0]
-        d = dict([(el.split(",")[0], el.split(",")[1:]) for el in mes.split("#")[1:]])
-        d["time"] = tm
-    
-    return d

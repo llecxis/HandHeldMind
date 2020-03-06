@@ -4,13 +4,12 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import vtk
-import math
+#import math
 import numpy as np
 import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
-
 import Worker_lecxis as Worker
 import Draw
 import QtrCalc as QC
@@ -18,35 +17,18 @@ import QtrCalc as QC
 # import Camera_2 as Ca2
 import Camera_2
 from scipy.spatial.transform import Rotation as R
-
-def trap_exc_during_debug(*args):
-    # when app raises uncaught exception, print info
-    print(args)
-
-# install exception hook: without this, uncaught exception would cause application to exit
-sys.excepthook = trap_exc_during_debug
+import network
+import os
+from scipy import interpolate
+from utils import trap_exc_during_debug
 
 def get_files(directory):
-    import os
     files = os.listdir(directory)
     for i in range(0,len(files)):
         files[i] = directory + files[i]
     return files
 
-def parse(mes):
-    mes = mes.decode("utf-8").replace(" ", "")
-    if (mes[0] == "#") :
-        print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
-        d = 1
-    else :
-        tm = mes.split("#")[0]
-        d = dict([(el.split(",")[0], el.split(",")[1:]) for el in mes.split("#")[1:]])
-        d["time"] = tm
-    
-    return d
-
 def integ(x, tck, constant = 10e-9):
-    from scipy import interpolate
     x = np.atleast_1d(x)
     out = np.zeros(x.shape, dtype=x.dtype)
     for n in range(len(out)):
@@ -82,7 +64,7 @@ def NextSet(self, n):                #операция перестановки
 class MainWindow(QMainWindow):   
 
     NUM_THREADS = 3 # number of phones
-    sig_abort_workers = pyqtSignal()
+    sig_abort = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -91,6 +73,8 @@ class MainWindow(QMainWindow):
         self.left = 500
         self.width = 1000
         self.height = 800
+
+        self.num_workers = 0
         
         self.setWindowIcon(QtGui.QIcon("icon.png"))
         self.setWindowTitle(self.title)
@@ -98,17 +82,18 @@ class MainWindow(QMainWindow):
         
         self.createMenu()
         self.createSensorsDock()  
-        
-        self.createCentralWidget()
-        
-        self.createToolBar()        
 
-        self.createExplorerDock() 
+        self.createToolBar()  
+
+        self.createExplorerDock()     
         
         self.createLogDockWidget()
         
+        self.createCentralWidget()  
+
         self.configureClicks()
-        
+
+        # TODO: initialize video recorder        
 
         self.log_text.append("Initialization Ok")
         #self.log_text.append()
@@ -143,6 +128,7 @@ class MainWindow(QMainWindow):
         # # ############### get qtr from matrix
         self.N_ref_imu = self.qtrs[2]
         self.N_arm_imu = self.qtrs[1]
+
         # # ################ get qtr from matrix
         # self.log_text.append("T - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]) )
 
@@ -154,6 +140,10 @@ class MainWindow(QMainWindow):
         self.X_qtr = self.three_qtr_solve(self.qtr_inv(self.N_arm_pos),self.qtr_inv(self.N_arm_imu),self.N_ref_imu)
         self.Z_qtr = self.qtr_inv(self.N_ref_imu)
         self.Y_qtr = self.N_arm_imu
+
+        # self.log_text.append("N - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
+        self.X_qtr = self.three_qtr_solve(self.N_arm_pos, self.qtr_inv(self.N_arm_imu), self.N_ref_imu)
+
         self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
         # Ivan Equation
 
@@ -219,12 +209,20 @@ class MainWindow(QMainWindow):
         # self.T_arm_imu = self.qtrs[1]
         # self.Y_qtr = self.three_qtr_solve(self.T_arm_pos, self.N_arm_pos, self.T_arm_imu)
  
+
         # temp = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv( self.qtrs[1] ), self.N_ref_imu)
         # self.log_text.append('Initial = ' + str(temp) + ' = ' + str( self.T_arm_pos ) )
 
         # temp = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv( self.N_arm_imu), self.N_ref_imu)
         # self.log_text.append('Initial = ' + str(temp) + ' = ' + str( self.N_arm_pos ) )
 
+        temp = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv( self.qtrs[1] ), self.N_ref_imu)
+
+        self.log_text.append('Initial = ' + str(temp) + ' = ' + str( self.T_arm_pos ) )
+
+        temp = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv( self.N_arm_imu), self.N_ref_imu)
+
+        self.log_text.append('Initial = ' + str(temp) + ' = ' + str( self.N_arm_pos ) )
         #self.log_text.append(str(self.Y_qtr))
         #self.log_text.append(str(self.YX_qtr))
 
@@ -239,6 +237,7 @@ class MainWindow(QMainWindow):
         print(mtx.as_dcm())
         end.FromMatrix3x3(mtx)
         return end
+
 
     def z_qtr_shift(self):
         
@@ -264,6 +263,7 @@ class MainWindow(QMainWindow):
         #     pass
         # video block
 
+
         # self.log_text.append("Z - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
         # self.Z_arm_pos = np.array([0.7,0.,0.,0.7])
         # right_side = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv(self.qtrs[1]), self.N_ref_imu)
@@ -283,11 +283,13 @@ class MainWindow(QMainWindow):
         self.play.setDisabled(True)
         self.stop.setEnabled(True)
         self.timer.start(self.timeStep)
+        # TODO: start video recording 
 
     def vtkEndCall(self):
         self.stop.setDisabled(True)
         self.play.setEnabled(True)
         self.timer.stop()
+        # TODO: stop video recording
 
     def KeyPress(self,obj, event):
         import re
@@ -351,7 +353,6 @@ class MainWindow(QMainWindow):
         buttons_layout.addWidget(self.tuning_z)
         buttons_layout.addStretch(1)
 
-        
         #Create
         self.scene = Draw.vtpDrawScene()
         directory = 'geometry/'
@@ -404,9 +405,11 @@ class MainWindow(QMainWindow):
     def timerCallback(self):
         #сюда преобразование координат qweqrty
         i_actor = 4
+
         #self.temp_qtr = self.qtrs[1]        
         self.temp_qtr = self.qtr_multiplication(self.ZYX_qtr, self.qtrs[1])
         #self.temp_qtr = self.three_qtr_multiplication(self.qtr_inv(self.qtrs[2]), self.qtrs[1], self.qtr_inv(self.X_qtr)) Ivan eqution
+
         self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[1], i_actor)
 
         i_actor = 5
@@ -632,35 +635,92 @@ class MainWindow(QMainWindow):
         self.shifts = []
         self.a = [0,1,2,3]
         self.video_flag_on = 0
-        ip = ['192.168.1.8','192.168.1.3','192.168.1.9']
-        port = 5555
+   
+        broadcaster = network.Broadcaster()
+        thread = QThread()
+        thread.setObjectName('thread_' + str(0))
+        self.__threads.append((thread, broadcaster))  # need to store worker too otherwise will be gc'd
+        #self.__threadsstatus.append(self.network_stat) #нужно продумать как именно добавлять статусы многопоточности в виджите
+        broadcaster.moveToThread(thread)
+
+        broadcaster.sig_status.connect(self.on_broadcaster_status)
+        broadcaster.sig_msg.connect(self.log_text.append)
+
+        # control worker:
+        self.sig_abort.connect(broadcaster.abort)
+
+        # get read to start worker:
+        # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
+        thread.started.connect(broadcaster.work) #(self.port)
+        thread.start()
+        self.log_text.append("Broadcaster started")
+
+        # ip = ['192.168.1.112','192.168.1.8','192.168.1.9']
+        # port = 5555
                          
-        for idx in range(self.NUM_THREADS):
+        # for idx in range(self.NUM_THREADS):
             
-            worker = Worker.Worker(idx, port, ip[idx])
-            thread = QThread()
-            thread.setObjectName('thread_' + str(idx))
-            self.__threads.append((thread, worker))  # need to store worker too otherwise will be gc'd
-            self.__threadsstatus.append(self.sensor_im_1) #нужно продумать как именно добавлять статусы многопоточности в виджите
-            self.stat.append(-1)
-            self.qtrs.append([1.,0.,0.,0.])
-            self.shifts.append([0.,0.,0.])
-            worker.moveToThread(thread)
+        #     worker = Worker.Worker(idx, port, ip[idx])
+        #     thread = QThread()
+        #     thread.setObjectName('thread_' + str(idx))
+        #     self.__threads.append((thread, worker))  # need to store worker too otherwise will be gc'd
+        #     self.__threadsstatus.append(self.sensor_im_1) #нужно продумать как именно добавлять статусы многопоточности в виджите
+        #     self.stat.append(-1)
+        #     self.qtrs.append([1.,0.,0.,0.])
+        #     self.shifts.append([0.,0.,0.])
+        #     worker.moveToThread(thread)
 
-            worker.sig_shifts.connect(self.on_worker_shifts)
-            worker.sig_qtr.connect(self.on_worker_qtr)
-            worker.sig_status.connect(self.on_worker_status)
-            # worker.sig_msg.connect(self.log_text.append)
+        #     worker.sig_shifts.connect(self.on_worker_shifts)
+        #     worker.sig_qtr.connect(self.on_worker_qtr)
+        #     worker.sig_status.connect(self.on_worker_status)
+        #     worker.sig_msg.connect(self.log_text.append)
 
-            # control worker:
-            self.sig_abort_workers.connect(worker.abort)
+        #     # control worker:
+        #     self.sig_abort.connect(worker.abort)
 
-            # get read to start worker:
-            # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
-            thread.started.connect(worker.work) #(self.port)
-            port = port + 2
-            thread.start()  # this will emit 'started' and start thread event loop
-    
+        #     # get read to start worker:
+        #     # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
+        #     thread.started.connect(worker.work) #(self.port)
+        #     port = port + 2
+        #     thread.start()  # this will emit 'started' and start thread event loop
+
+    @pyqtSlot(int, int, str)
+    def on_broadcaster_status(self, flag: int, port: int, ip: str):
+
+        if flag == 1:
+            if self.num_workers < self.NUM_THREADS:
+                self.start_worker(self.num_workers, port, ip)
+                self.num_workers += 1
+            else:
+                pass
+
+    def start_worker(self, idx, port, ip):
+            
+        worker = Worker.Worker(idx, port, ip)
+        thread = QThread()
+        thread.setObjectName('thread_' + str(idx + 1))
+        self.__threads.append((thread, worker))  # need to store worker too otherwise will be gc'd
+        self.__threadsstatus.append(self.sensor_im_1) #нужно продумать как именно добавлять статусы многопоточности в виджите
+        self.stat.append(-1)
+        self.qtrs.append([1.,0.,0.,0.])
+        self.shifts.append([0.,0.,0.])
+        worker.moveToThread(thread)
+        
+        worker.sig_shifts.connect(self.on_worker_shifts)
+        worker.sig_qtr.connect(self.on_worker_qtr)
+        worker.sig_status.connect(self.on_worker_status)
+        worker.sig_msg.connect(self.log_text.append)
+
+        # control worker:
+        self.sig_abort.connect(worker.abort)
+
+        # get read to start worker:
+        # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
+        thread.started.connect(worker.work) #(self.port)
+        thread.start()
+
+        self.log_text.append('Worker #' + str(idx) + ' started.') 
+
     @pyqtSlot(int, list)
     def on_worker_shifts(self, worker_id: int, data: list):
         # self.log_text.append('Worker #{}: {}'.format(worker_id, data))
@@ -687,7 +747,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(int, int)
     def on_worker_status(self, worker_id: int, flag: int):
-        # self.log.append('worker #{} done'.format(worker_id))
+        #self.log_text.append('worker #{} done'.format(worker_id))
         # self.progress.append('-- Worker {} DONE'.format(worker_id))
         if (self.stat[worker_id] == flag):
             pass
@@ -712,6 +772,10 @@ class MainWindow(QMainWindow):
         #self.sig_abort_workers.emit()
         # self.log.append('Asking each worker to abort')
         for thread, Worker in self.__threads:  # note nice unpacking by Python, avoids indexing
+    def abort(self):
+        self.sig_abort.emit()
+        # self.log.append('Asking each worker to abort')
+        for thread, task in self.__threads:  # note nice unpacking by Python, avoids indexing
             thread.quit()  # this will quit **as soon as thread event loop unblocks**
             thread.wait()  # <- so you need to wait for it to *actually* quit
 
@@ -858,7 +922,15 @@ class MainWindow(QMainWindow):
             self.log_text.append('To connect IP : ' + str(host_ip) )
             self.log_text.append('Start from port: 5555')
 
-App = QApplication(sys.argv)
-window = MainWindow()
-sys.exit(App.exec())
+
+if __name__ == "__main__":
+
+    # install exception hook: without this, uncaught exception would cause application to exit
+    sys.excepthook = trap_exc_during_debug
+
+    # TODO: set up video recorder
+
+    App = QApplication(sys.argv)
+    window = MainWindow()
+    sys.exit(App.exec())
 

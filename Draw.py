@@ -1,15 +1,13 @@
-import sys
+#import sys
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import vtk
-import math
+#import math
 import numpy as np
-import time
+#import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-import socket
-import traceback
 import QtrCalc as QC
 from scipy.spatial.transform import Rotation as R
 
