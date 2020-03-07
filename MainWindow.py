@@ -10,12 +10,12 @@ import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
-import Worker_val as Worker
+import Worker as Worker
 import Draw
 import QtrCalc as QC
 # import Camera_1 as Ca1
 # import Camera_2 as Ca2
-import Camera_2
+import Camera_2 
 from scipy.spatial.transform import Rotation as R
 import network
 import os
@@ -37,7 +37,7 @@ def integ(x, tck, constant = 10e-9):
     return out
 
 def swap(self, i, j): #поменять местами два элемента массива
-    s = self.a[i]    
+    s = self.a[i]
     self.a[i] = self.a[j]
     self.a[j] = s
 
@@ -238,7 +238,6 @@ class MainWindow(QMainWindow):
         end.FromMatrix3x3(mtx)
         return end
 
-
     def z_qtr_shift(self):
         
         self.scene.reInitialize_actors(self.qtrs[2])
@@ -361,7 +360,6 @@ class MainWindow(QMainWindow):
         self.obj_list = obj
         self.ren = self.scene.initScene_qt(obj)
         self.initial_qtr_norm()
-
         
 
         #Settings
@@ -374,7 +372,7 @@ class MainWindow(QMainWindow):
 
         #start video recording in threads
 
-        # self.start_video()
+        #self.start_video()
         
 
         # self.controller = threads_qt.Controller()
@@ -404,48 +402,53 @@ class MainWindow(QMainWindow):
     
     def timerCallback(self):
         #сюда преобразование координат qweqrty
-        i_actor = 4
+        
+        try:
+            if (len(self.qtrs) > 0 ):    
+                i_actor = 4
+                #self.temp_qtr = self.qtrs[1]  
+                self.temp_qtr = self.qtr_multiplication(self.ZYX_qtr, self.qtrs[1])
+                #self.temp_qtr = self.three_qtr_multiplication(self.qtr_inv(self.qtrs[2]), self.qtrs[1], self.qtr_inv(self.X_qtr)) Ivan eqution
 
-        #self.temp_qtr = self.qtrs[1]        
-        self.temp_qtr = self.qtr_multiplication(self.ZYX_qtr, self.qtrs[1])
-        #self.temp_qtr = self.three_qtr_multiplication(self.qtr_inv(self.qtrs[2]), self.qtrs[1], self.qtr_inv(self.X_qtr)) Ivan eqution
+                self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[1], i_actor)
 
-        self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[1], i_actor)
+                i_actor = 5
+                #self.actors_shift = np.array(self.scene.initial_pos_actors[4]) + np.array(self.scene.mtxRot).dot(np.array(self.scene.initial_pos_actors[5]) - np.array(self.scene.initial_pos_actors[4]))
+                self.shifts[0] = self.shift_calculus(4,i_actor)
+                #self.temp_qtr = self.qtr_calculus(4,i_actor)
+                #self.temp_qtr = self.qtr_multiplication(self.qtrs[0], self.n_pos_temp_qtr)
+                self.temp_qtr = self.qtrs[0]
+                # print(self.actors_shift,self.scene.initial_pos_actors[4])
+                self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
 
-        i_actor = 5
-        #self.actors_shift = np.array(self.scene.initial_pos_actors[4]) + np.array(self.scene.mtxRot).dot(np.array(self.scene.initial_pos_actors[5]) - np.array(self.scene.initial_pos_actors[4]))
-        self.shifts[0] = self.shift_calculus(4,i_actor)
-        #self.temp_qtr = self.qtr_calculus(4,i_actor)
-        #self.temp_qtr = self.qtr_multiplication(self.qtrs[0], self.n_pos_temp_qtr)
-        self.temp_qtr = self.qtrs[0]
-        # print(self.actors_shift,self.scene.initial_pos_actors[4])
-        self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
+                i_actor = 10
+                self.shifts[0] = self.shift_calculus(4,i_actor)
+                #self.temp_qtr = self.qtr_calculus(4,i_actor)
+                #self.temp_qtr = self.qtr_multiplication(self.qtrs[0], self.n_pos_temp_qtr)
+                self.temp_qtr = self.qtrs[0]
+                self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
 
-        i_actor = 10
-        self.shifts[0] = self.shift_calculus(4,i_actor)
-        #self.temp_qtr = self.qtr_calculus(4,i_actor)
-        #self.temp_qtr = self.qtr_multiplication(self.qtrs[0], self.n_pos_temp_qtr)
-        self.temp_qtr = self.qtrs[0]
-        self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
+                # print(abs(round(self.check[2] - self.qtrs[2][2], 3)), ' ', self.eps)
+                # if (abs(self.check[2] - self.qtrs[2][2]) > self.eps):
+                #     self.check[2] = self.qtrs[2][2]
 
-        # print(abs(round(self.check[2] - self.qtrs[2][2], 3)), ' ', self.eps)
-        # if (abs(self.check[2] - self.qtrs[2][2]) > self.eps):
-        #     self.check[2] = self.qtrs[2][2]
-        for el in range(len(self.scene.modelActor)):
-            self.scene.SetRefQuatOrientation(self.qtrs[2], self.shifts[0], el) # self.qtr_multiplication(self.scene.initial_pos_actors[el],self.scene.norm_qtr[el])
-                
-        # i_actor = 2
-        # self.shifts[0] = self.shift_calculus(2,i_actor)
-        # #self.temp_qtr = self.qtrs[2] #self.qtr_multiplication(self.qtrs[2], np.array([1.,0.,0.,0.]))
-        # self.temp_qtr = self.qtr_multiplication(self.qtrs[2], np.array([1.,0.,0.,0.]))
-        # #self.log_text.append(str(self.temp_qtr))
-        # self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
+                for el in range(len(self.scene.modelActor)):
+                    self.scene.SetRefQuatOrientation(self.qtrs[2], self.shifts[0], el) # self.qtr_multiplication(self.scene.initial_pos_actors[el],self.scene.norm_qtr[el])
 
-        # i_actor = len(self.scene.modelActor)
-        # self.temp_qtr = self.rotBodyAtGlob.as_quat()
-        # self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
+                # i_actor = 2
+                # self.shifts[0] = self.shift_calculus(2,i_actor)
+                # #self.temp_qtr = self.qtrs[2] #self.qtr_multiplication(self.qtrs[2], np.array([1.,0.,0.,0.]))
+                # self.temp_qtr = self.qtr_multiplication(self.qtrs[2], np.array([1.,0.,0.,0.]))
+                # #self.log_text.append(str(self.temp_qtr))
+                # self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
 
-        self.iren.Render() #NOT: self.ren.Render()
+                # i_actor = len(self.scene.modelActor)
+                # self.temp_qtr = self.rotBodyAtGlob.as_quat()
+                # self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
+
+                self.iren.Render() #NOT: self.ren.Render()
+        except:
+            print("No worker ", i_actor) 
     
     def shift_calculus(self,i_from_actor,i_to_actor):
         return np.array(self.scene.initial_pos_actors[i_from_actor]) + np.array(self.scene.mtxRot[i_from_actor]).dot(np.array(self.scene.initial_pos_actors[i_to_actor]) - np.array(self.scene.initial_pos_actors[i_from_actor]))- np.array(self.scene.initial_pos_actors[i_to_actor])
@@ -610,7 +613,7 @@ class MainWindow(QMainWindow):
     def start_video(self):
         self.frame_name = 'frame_'
         self.file_name = 'output_'
-        self.camera_paths = ['rtsp://192.168.1.2:8553/PSIA/Streaming/channels/1?videoCodecType=MPEG4','rtsp://192.168.1.5:8553/PSIA/Streaming/channels/1?videoCodecType=MPEG4']
+        self.camera_paths = ['rtsp://192.168.1.168:8553/PSIA/Streaming/channels/1?videoCodecType=MPEG4','rtsp://192.168.1.108:8553/PSIA/Streaming/channels/1?videoCodecType=MPEG4']
         self.NUM_CAMERAS = 2
         for idx in range(self.NUM_CAMERAS):            
             thread = QThread()

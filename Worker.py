@@ -12,6 +12,7 @@ import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
+import os
 #import Camera_test as ct
 
 #import re
@@ -31,7 +32,7 @@ import network
 def parse(mes):
     mes = mes.decode("utf-8").replace(" ", "")
     if (mes[0] == "#") :
-        #print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
+        print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
         d = 1
     else :
         d = {}
@@ -60,7 +61,7 @@ class Worker(QObject):
 
     
 
-    def __init__(self, id: int, port: int, ip: str, file_prefix='test_sensor_data/'):
+    def __init__(self, id: int, port: int, ip: str, file_prefix='new_data/'):
         super().__init__()
         self.__id = id
         self.ip = ip
@@ -100,7 +101,10 @@ class Worker(QObject):
             self.sync_time()
 
             dt = datetime.now()
-            filename = self.file_prefix + str(self.port)+ dt.isoformat(timespec='seconds') + '.csv'
+            local_path = os.getcwd()
+            filename = os.path.join(local_path,'new_data/',str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.csv')
+
+            # filename = self.file_prefix + str(self.port)+ dt.isoformat() + '.csv'
             with open(filename, 'a') as the_file:
                 the_file.write('#id, time, calib_status, lin_acc, rot_vec, gyr, acc, grav, mag\n')
             
@@ -306,7 +310,6 @@ class Worker(QObject):
                                             
             #             # else:
             #             #     for j in range(dis): # корректировка траектории если скорость была мала
-                                
             #             #         linacc[-1-j] = [0.0,0.0,0.0]
 
             #     # if (i > 498):
