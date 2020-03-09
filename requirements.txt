@@ -2,3 +2,4 @@
 PyQt5==5.14
 vtk
 scipy
+opencv-python
