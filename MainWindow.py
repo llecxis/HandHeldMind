@@ -195,6 +195,33 @@ class MainWindow(QMainWindow):
 
         # self.log_text.append("Computer get as input " + str(self.qtr_multiplication(self.X_qtr, self.qtrs[1]))        
 
+        ###### Sergey's addition to his version ##########
+
+         # # calc body rot rel to the ImuRef
+        # rotImuRefAtGlob = R.from_quat(self.qtrs[2])
+        # self._rotBodyAtImuRef = rotImuRefAtGlob.inv()  * self.rotBodyAtGlob
+        
+        # # calc arm rot rel to IMU arm
+        # # we assume an arm which frame is aligned to the body frame in N position
+        # # we use an identity mtx here, but we can use any other mtx describing 
+        # # rotation of a body part rel to the body frame
+
+        # N_rotArmAtBody = R.from_dcm(np.identity(3))
+        
+        # rotBodyAtImuArm =  N_rot_arm_imu.inv() * self.rotBodyAtGlob
+        
+        # self._rotArmAtImuArm = rotBodyAtImuArm * N_rotArmAtBody
+        # self.X_qtr = self._rotArmAtImuArm.as_quat()
+
+        #self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
+
+        # print("N ImuArm@Glob\n", self._N_rotImuArmAtGlob.as_dcm())
+        # print("T ImuArm@Glob\n", T_rotImuArmAtGlob.as_dcm())
+        # print("mtxBodyAtGlob\n", mtxBodyAtGlob)
+        # print("rotBodyAtGlob\n", rotBodyAtGlob.as_dcm())
+        # print("rotArmAtImuArm\n", self._rotArmAtImuArm.as_dcm())
+        
+
         ########################################## get matrix from qtr
 
         right_side = self.three_qtr_multiplication(self.X_qtr,self.qtr_inv(self.qtrs[1]), self.N_ref_imu)
