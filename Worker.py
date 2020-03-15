@@ -102,7 +102,7 @@ class Worker(QObject):
 
             dt = datetime.now()
             local_path = os.getcwd()
-            filename = os.path.join(local_path,'new_data/',str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.csv')
+            filename = os.path.join(local_path,'new_data/', str(self.port) + str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.csv')
 
             # filename = self.file_prefix + str(self.port)+ dt.isoformat() + '.csv'
             with open(filename, 'a') as the_file:
@@ -204,13 +204,13 @@ class Worker(QObject):
                 d['time'] = round(float(d['time']) - st,6)
                 d['calib_status'] = hex(int(d['calib_status'])).lstrip('0x').zfill(4)
 
-                data_row = []
-                for column in d.keys():
-                    if isinstance(d[column], list):
-                        for value in d[column]:
-                            data_row.append(value)
-                    else:
-                        data_row.append(d[column])
+                # data_row = []
+                # for column in d.keys():
+                #     if isinstance(d[column], list):
+                #         for value in d[column]:
+                #             data_row.append(value)
+                #     else:
+                #         data_row.append(d[column])
                 
                 #d['linacc'] = [float(item) for item in d['linacc']]
 
@@ -222,8 +222,10 @@ class Worker(QObject):
 
                 diff = time.time() - beg
 
-                row = [str(datetime.fromtimestamp(timestamp))] + data_row
-                emptylist.append(', '.join(str(el) for el in row))
+                # row = [str(datetime.fromtimestamp(timestamp).strftime("%H:%M:%S:%f"))] 
+                emptylist.append([d['id'],str(datetime.fromtimestamp(timestamp).strftime("%H:%M:%S:%f")),d['time'],d['calib_status'],*d['rotvec'],*d['linacc'],*d['grav']])
+                # emptylist.append(', '.join(str(el) for el in row))
+
                 #self.sig_msg.emit(str([str(datetime.fromtimestamp(timestamp))] +
                 #                            d['time'] + d['acc'] + d['gyr'] + d['mag'] + d['grav'] +
                 #                            d['linacc'] + d['rotvec']))
@@ -333,11 +335,14 @@ class Worker(QObject):
             #         # note that "step" value will not necessarily be same for every thread
             #         self.sig_msg.emit('Worker #{} aborting work at step {}'.format(self.__id, step))
             #         break
-
+                if (self.port == 5563) and (diff%10 > 999):
+                    print(i)
                 if diff >= time_end:
                     dt = datetime.now()
                     with open(filename, 'a') as the_file:
-                         the_file.write('\n'.join(el for el in emptylist))
+                        for el in emptylist:
+                            the_file.write(', '.join(str(eli) for eli in el))
+                            the_file.write('\n')
                     #print(str(self.port), " - stopped" )  
                     #print(M)
                      #print(gist_times)
@@ -354,3 +359,10 @@ class Worker(QObject):
     def abort(self):
         self.sig_msg.emit('Worker #{} notified to abort'.format(self.__id))
         self.__abort = True
+
+    def __del__(self):
+        self.sckt_in.shutdown()
+        self.sckt_in.close()
+        self.sckt_out.shutdown()
+        self.sckt_out.close()
+        print('Worker sockets closed')

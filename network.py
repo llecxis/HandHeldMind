@@ -59,7 +59,7 @@ class Broadcaster(QtCore.QObject):
         while 1:
             try:
                 msg_device, address = self.sckt.recvfrom(8192)
-                #print(type(address[0]))
+                # print(msg_device.decode())
                 if msg_device.decode()[:len(self.msg)] == self.msg:
                     port = int(msg_device.decode().split('#')[1]) if '#' in msg_device.decode() else 0000
                     if port != 0000:
@@ -80,3 +80,9 @@ class Broadcaster(QtCore.QObject):
     def abort(self):
         self.sig_msg.emit('Broadcaster notified to abort')
         self.__abort = True
+    
+    def __del__(self):
+
+        self.sckt.shutdown()
+        self.sckt.close()
+        print('Worker sockets closed')

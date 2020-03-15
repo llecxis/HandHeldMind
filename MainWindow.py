@@ -63,7 +63,7 @@ def NextSet(self, n):                #операция перестановки
 
 class MainWindow(QMainWindow):   
 
-    NUM_THREADS = 3 # number of phones
+    NUM_THREADS = 5 # number of phones
     sig_abort = pyqtSignal()
 
     def __init__(self):
@@ -73,7 +73,7 @@ class MainWindow(QMainWindow):
         self.left = 500
         self.width = 1000
         self.height = 800
-
+        self.WorkerAdress = list()
         self.num_workers = 0
         
         self.setWindowIcon(QtGui.QIcon("icon.png"))
@@ -234,34 +234,18 @@ class MainWindow(QMainWindow):
 
     def mtx_to_qtr(self,mtx):        
         end = vtk.vtkQuaterniond(np.array([1.,0.,0.,0.]))
-        print(mtx.as_dcm())
+        #print(mtx.as_dcm())
         end.FromMatrix3x3(mtx)
         return end
 
     def z_qtr_shift(self):
         
-        self.scene.reInitialize_actors(self.qtrs[2])
+        # self.scene.reInitialize_actors(self.qtrs[2])
 
-        # # video block
-        # if self.video_flag_on == 0:
-        #     self.video_timer = time.time()
-        #     self.start_video()
-        #     # Ca1.start_AVrecording()
-        #     # Ca2.start_AVrecording()
-        #     self.log_text.append('Video_started')
-        #     self.video_flag_on = 1
-        # elif self.video_flag_on == 1:
-        #     self.video_flag_on = 0            
-        #     self.log_text.append('Video_stoped at ' + str(time.time() - self.video_timer ) )
-        #     self.abort_workers() 
-        #     # Ca1.stop_AVrecording()
-        #     # Ca1.file_manager()
-        #     # Ca2.stop_AVrecording()
-        #     # Ca2.file_manager()
-        # else:
-        #     pass
-        # video block
+        for i,el in enumerate(self.WorkerAdress):
+            self.start_worker(i, el['port'], el['ip'])
 
+        self.start_video()
 
         # self.log_text.append("Z - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
         # self.Z_arm_pos = np.array([0.7,0.,0.,0.7])
@@ -276,7 +260,6 @@ class MainWindow(QMainWindow):
         # self.z_pos_temp_mat = self.scene.mtxRot[4]
         # self.z_pos_temp_qtr = self.qtrs[1]
         # self.log_text.append(str(self.z_pos_temp_mat))
-
 
     def vtkCall(self):      
         self.play.setDisabled(True)
@@ -356,8 +339,9 @@ class MainWindow(QMainWindow):
         self.scene = Draw.vtpDrawScene()
         directory = 'geometry/'
         obj = get_files(directory)
-        print(obj)
-        self.obj_list = obj
+        rigth_list = ['geometry/hat_jaw.vtp', 'geometry/hat_skull.vtp', 'geometry/hat_spine.vtp', 'geometry/humerus.vtp', 'geometry/humerus_l.vtp', 'geometry/radius_lv.vtp', 'geometry/radius_rv.vtp', 'geometry/scapula.vtp', 'geometry/scapula_l.vtp', 'geometry/thorax.vtp', 'geometry/ulna_lv.vtp', 'geometry/ulna_rv.vtp']
+        rigth_list.append(list(set(obj) ^ set(rigth_list)))
+        self.obj_list = rigth_list
         self.ren = self.scene.initScene_qt(obj)
         self.initial_qtr_norm()
         
@@ -432,8 +416,8 @@ class MainWindow(QMainWindow):
                 # if (abs(self.check[2] - self.qtrs[2][2]) > self.eps):
                 #     self.check[2] = self.qtrs[2][2]
 
-                for el in range(len(self.scene.modelActor)):
-                    self.scene.SetRefQuatOrientation(self.qtrs[2], self.shifts[0], el) # self.qtr_multiplication(self.scene.initial_pos_actors[el],self.scene.norm_qtr[el])
+                # for el in range(len(self.scene.modelActor)):
+                #     self.scene.SetRefQuatOrientation(self.qtrs[2], self.shifts[0], el) # self.qtr_multiplication(self.scene.initial_pos_actors[el],self.scene.norm_qtr[el])
 
                 # i_actor = 2
                 # self.shifts[0] = self.shift_calculus(2,i_actor)
@@ -609,6 +593,7 @@ class MainWindow(QMainWindow):
         self.N_arm_imu = np.array([1, 0., 0., 0.])
         self.check = np.array([1.,0.,0.,0.])
         self.eps = 0.01
+        
 
     def start_video(self):
         self.frame_name = 'frame_'
@@ -692,7 +677,9 @@ class MainWindow(QMainWindow):
 
         if flag == 1:
             if self.num_workers < self.NUM_THREADS:
-                self.start_worker(self.num_workers, port, ip)
+                d = { "port" : port, 'ip': ip }
+                self.WorkerAdress.append(d)
+                # self.start_worker(self.num_workers, port, ip)
                 self.num_workers += 1
             else:
                 pass
@@ -933,8 +920,6 @@ if __name__ == "__main__":
 
     # install exception hook: without this, uncaught exception would cause application to exit
     sys.excepthook = trap_exc_during_debug
-
-    # TODO: set up video recorder
 
     App = QApplication(sys.argv)
     window = MainWindow()

@@ -122,7 +122,7 @@ class vtpDrawScene:
             # tr.Translate(self.initial_pos_actors[el])
             self.norm_qtr.append(np.array([1.,0.,0.,0.]))
             self.modelActor[el].SetPosition(self.initial_pos_actors[el])
-        print(len(self.norm_qtr))             
+        # print(len(self.norm_qtr))             
 
             
         axes = vtk.vtkAxesActor()
