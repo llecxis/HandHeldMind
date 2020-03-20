@@ -70,17 +70,15 @@ class Worker(QObject):
         self.__abort = False
         self.sckt_in = network.init_socket(self.port, network.SO_BIND)
         self.sckt_out = network.init_socket(self.port + 1, network.SO_CONNECT, self.ip)
-        self.start = time.time()
         self.offset = 0
         self.delay = 0
-        # TODO: create ip finder
+        self.tymesync_thread = QThread()
+        self.receive_thread = QThread()
 
     @pyqtSlot()
     def work(self):
 
         te = 100
-        
-        #emptylist = list()
 
         """
         Pretend this worker method does work that takes a long time. During this time, the thread's
@@ -92,13 +90,22 @@ class Worker(QObject):
         thread_id = int(QThread.currentThreadId())  # cast to int() is necessary
         self.sig_msg.emit('Running worker #{} from thread "{}" (#{})'.format(self.__id, thread_name, thread_id))
 
-        # for step in range(100):
-        #     time.sleep(0.1)
-        ##################################################
-
         while 1:
             
-            self.sync_time()
+            timesync_handler = TimeSyncHandler(self.sckt_out)
+            self.tymesync_thread.setObjectName('tymesync_thread_' + str(thread_id))
+    
+            timesync_handler.moveToThread(self.timesync_thread)
+
+            timesync_handler.sig_status.connect(self.on_timesync_handler_status)
+            timesync_handler.sig_msg.connect(self.sig_msg)
+
+            # control worker:
+            #self.sig_abort.connect(timysync_handler.abort)
+
+            # get read to start worker:
+            self.timesync_thread.started.connect(timesync_handler.run)
+            self.timesync_thread.start()
 
             dt = datetime.now()
             local_path = os.getcwd()
@@ -108,59 +115,30 @@ class Worker(QObject):
             with open(filename, 'a') as the_file:
                 the_file.write('#id, time, calib_status, lin_acc, rot_vec, gyr, acc, grav, mag\n')
             
-            self.receive_data(filename)
-
-    def sync_time(self):
-        
-        res_time=1000000
-
-        mes_test = 'time'
-        message = ''
-        t1_s = time.time()
-        str_ms = str((t1_s - self.start)*res_time).split('.')[0]
-        cur_mes_test = mes_test + ',' + str_ms
+            self.receive_data(filename, te)
+            
+            #receive_handler = ReceiveHandler(self.__id, self.sckt_in, filename, te)
+            #self.receive_thread.setObjectName('receive_thread_' + str(thread_id))
     
-        self.sckt_out.send(cur_mes_test.encode())
+            #receive_handler.moveToThread(self.receive_thread)
 
-        while 1:
-            try:
-                if message[:len(mes_test)] == mes_test:
-                    
-                    t1_r = int(message.split(',')[2])
-                    t2_s = int(message.split(',')[3])
-                    str_ms = str((t2_r - self.start)*res_time).split('.')[0]
-                    cur_mes_test = message + ',' + str_ms
-                    
-                    time.sleep(0.01)
-                    t3_s = time.time()
-                    str_ms = str((t3_s - self.start)*res_time).split('.')[0]
-                    cur_mes_test = message + ',' + str_ms
-                    self.sckt_out.send(cur_mes_test.encode())
-                    break
-                else:
-                    mes, address = self.sckt_out.recvfrom(8192)
-                    message = mes.decode()
-                    t2_r = time.time()
-                
-            except socket.timeout:
-                t1_s = time.time()
-                str_ms = str((t1_s - self.start)*res_time).split('.')[0]
-                cur_mes_test = mes_test + ',' + str_ms
-                self.sckt_out.send(cur_mes_test.encode())
-            #TODO: add exception for message 
-            except (KeyboardInterrupt, SystemExit):
-                raise
-            except:
-                traceback.print_exc()
-    
-        t1_s = int((t1_s - self.start) * res_time)
-        t2_r = int((t2_r - self.start) * res_time)
-    
-        self.offset = round((t1_r - t1_s - t2_r + t2_s) / 2)
-        self.delay = round((t1_r - t1_s + t2_r - t2_s) / 2)
-        
-    def receive_data(self, filename, time_end=100):
-        
+            #receive_handler.sig_status.connect(self.sig_status)
+            #receive_handler.sig_msg.connect(self.sig_msg)
+            #receive_handler.sig_qtr.connect(self.sig_qtr)
+
+            # control worker:
+            #self.sig_abort.connect(receive_handler.abort)
+
+            # get read to start worker:
+            #self.receive_thread.started.connect(receive_handler.run)
+            #receive_thread.start()
+
+    @pyqtSlot(int, int)
+    def on_timesync_handler_status(offset, delay):
+        self.offset = offset
+        self.delay = delay
+
+    def receive_data(filename, time_end):
         flag = 1
         x = list()
         times = list()
@@ -348,9 +326,284 @@ class Worker(QObject):
                 raise
             except:
                 traceback.print_exc()
-        
-        ##################################################
 
     def abort(self):
+        self.timesync_thread.quit()
+        self.timesync_thread.wait()
+        self.receive_thread.quit()
+        self.receive_thread.wait()
+
         self.sig_msg.emit('Worker #{} notified to abort'.format(self.__id))
         self.__abort = True
+
+
+class TimeSyncHandler(QObject):
+
+    sig_status = pyqtSignal(int, int)
+    sig_msg = pyqtSignal(str) 
+
+    def __init__(self, socket):
+        super().__init__()
+        self.start = time.time()
+        self.socket = socket
+
+    @pyqtSlot()
+    def run(self):
+        
+        res_time=1000000
+
+        mes_test = 'time'
+        message = ''
+        t1_s = time.time()
+        str_ms = str((t1_s - self.start)*res_time).split('.')[0]
+        cur_mes_test = mes_test + ',' + str_ms
+    
+        self.socket.send(cur_mes_test.encode())
+
+        while 1:
+            try:
+                if message[:len(mes_test)] == mes_test:
+                    
+                    t1_r = int(message.split(',')[2])
+                    t2_s = int(message.split(',')[3])
+                    str_ms = str((t2_r - self.start)*res_time).split('.')[0]
+                    cur_mes_test = message + ',' + str_ms
+                    
+                    time.sleep(0.01)
+                    t3_s = time.time()
+                    str_ms = str((t3_s - self.start)*res_time).split('.')[0]
+                    cur_mes_test = message + ',' + str_ms
+                    self.socket.send(cur_mes_test.encode())
+                    break
+                else:
+                    mes, address = self.socket.recvfrom(8192)
+                    message = mes.decode()
+                    t2_r = time.time()
+                
+            except socket.timeout:
+                t1_s = time.time()
+                str_ms = str((t1_s - self.start)*res_time).split('.')[0]
+                cur_mes_test = mes_test + ',' + str_ms
+                self.socket.send(cur_mes_test.encode())
+            #TODO: add exception for message 
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except:
+                traceback.print_exc()
+    
+        t1_s = int((t1_s - self.start) * res_time)
+        t2_r = int((t2_r - self.start) * res_time)
+    
+        offset = round((t1_r - t1_s - t2_r + t2_s) / 2)
+        delay = round((t1_r - t1_s + t2_r - t2_s) / 2)
+
+        self.sig_status.emit(offset, delay)
+
+        time.sleep(10)
+
+# class ReceiveHandler(QObject):
+
+#     sig_status = pyqtSignal(int, int)
+#     sig_msg = pyqtSignal(str)
+#     sig_qtr = pyqtSignal(int, list)
+
+#     def __init__(self, id, socket, filename, time_end):
+#         super().__init__()
+#         self.__id = id
+#         self.socket = socket
+#         self.filename = filename
+#         self.time_end = time_end
+#         self.delay = 0
+
+#     @pyqtSlot
+#     def run(self):
+        
+#         flag = 1
+#         x = list()
+#         times = list()
+#         linacc = list()
+#         rotmat = list()
+#         xnew = list()
+#         mean_vel = list()
+#         integrated_lin_acc = list()
+#         gist_times = list()
+#         e = np.matrix([[1.,0.,0.],[0.,1.,0],[0.,0.,1.]])
+#         i = 0
+#         shifts = [0.,0.,0.]
+#         times.append(0.)
+#         temp_max = 0
+#         M = 0.     
+
+#         emptylist = []   
+
+#         beg = time.time()
+#         while 1:
+#             try: 
+#                 ready = select.select([self.socket], [], [], 1)
+#                 if (ready[0] == []):
+#                     self.sig_status.emit(self.__id, 0)
+
+#                 message, address = self.socket.recvfrom(8192)
+#                 sig_time = times[-1]
+
+#                 d = parse(message) #time and dictionary
+
+#                 if d == 1: 
+#                     continue
+                
+#                 if flag: #start time flag
+#                     st = float(d['time'])
+#                     #temp = st
+#                     #print(st)                
+
+#                 #print(d['time'])
+                
+#                 d['time'] = round(float(d['time']) - st,6)
+#                 d['calib_status'] = hex(int(d['calib_status'])).lstrip('0x').zfill(4)
+
+#                 data_row = []
+#                 for column in d.keys():
+#                     if isinstance(d[column], list):
+#                         for value in d[column]:
+#                             data_row.append(value)
+#                     else:
+#                         data_row.append(d[column])
+                
+#                 #d['linacc'] = [float(item) for item in d['linacc']]
+
+#                 #emptylist.append(str(d['time']) + str( d['rotvec']))
+
+#                 timestamp = time.time()
+#                 timestamp = timestamp - self.delay
+
+
+#                 diff = time.time() - beg
+
+#                 row = [str(datetime.fromtimestamp(timestamp))] + data_row
+#                 emptylist.append(', '.join(str(el) for el in row))
+#                 #self.sig_msg.emit(str([str(datetime.fromtimestamp(timestamp))] +
+#                 #                            d['time'] + d['acc'] + d['gyr'] + d['mag'] + d['grav'] +
+#                 #                            d['linacc'] + d['rotvec']))
+
+#                 linacc.append(d['linacc'])
+#                 if flag: #start time flag
+#                     times[0] = d['time']
+#                     flag = 0
+#                 else:
+#                     times.append(d['time'])
+#                     temp_max = times[-1] - times[-2]
+#                     gist_times.append(temp_max)
+
+#                 if temp_max > M:
+#                     M = temp_max
+#                     #print(temp_max)
+
+#                 qtr = [float(item) for item in d['rotvec'][0:4]]
+
+#                 # qtr = [float(d['rotvec'][2]),float(d['rotvec'][0]),float(d['rotvec'][1]),float(d['rotvec'][3])]
+
+
+#                 #print(qtr)
+#                 self.sig_qtr.emit(self.__id,qtr)
+
+#                 #i += 1
+#                 #length = 25 #длина окна усреденения
+#                 #dis = 5 #5 #изменение траектории каждые 5 знчений
+#                 #self.sig_shifts.emit(self.__id, shifts)
+#                 #print(len(times), " ", i)
+
+#                 ############################################################################################################       calculating shifts           
+#             #     if (i % dis == 0) and (i > 25): #(i % dis == 0) or (i > 25): #(i == 199): # (i == 990): (i == int(te*100-2))
+#             #         # print(linacc)
+#             #         accnp = np.array(linacc)
+#             #         x = np.array(times)                
+#             #         #print(times)
+#             #         # y0 = accnp[:,0]
+
+#             #         y0 = savgol_filter(accnp[:,0], lenth, 3)
+#             #         y1 = savgol_filter(accnp[:,1], lenth, 3)
+#             #         y2 = savgol_filter(accnp[:,2], lenth, 3)
+
+#             #         # print(len(x))
+#             #         # print(len(y0))
+#             #         # print(y0)
+
+#             #         tck0 = interpolate.splrep(x, y0, s=0)
+#             #         tck1 = interpolate.splrep(x, y1, s=0)
+#             #         tck2 = interpolate.splrep(x, y2, s=0)
+                                
+#             #         ynew = interpolate.splev(x, tck0, der=0)
+
+#             #         mean_vel.append(np.mean(ynew[-dis:]))
+#             #         x_mean_vel = np.linspace(0,5, num = len(mean_vel))
+
+#             #         #print(ynew)
+#             #         #print(y0)  
+
+#             #         #print(len(x), ' ', abs(int(np.mean(ynew[-dis:]) * 1000)))
+
+
+#             #         # check = np.mean(ynew[-dis:]) * 1000.
+#             #         # if not(np.isnan(check)):
+#             #         #     if (abs(int(check)) > 10 ):
+
+#             #         yint0 = integ(x, tck0)
+#             #         yint1 = integ(x, tck1)
+#             #         yint2 = integ(x, tck2)
+                    
+#             #         tck00 = interpolate.splrep(x, yint0, s=0)
+#             #         tck10 = interpolate.splrep(x, yint1, s=0)
+#             #         tck20 = interpolate.splrep(x, yint2, s=0)
+
+#             #         yint00 = integ(x, tck00)
+#             #         yint10 = integ(x, tck10)
+#             #         yint20 = integ(x, tck20)
+
+#             #         shifts = [yint20[-1,0],yint10[-1,0],yint00[-1,0]]
+#             #         shifts = [0.,0.,0.]
+#             #         self.sig_shifts.emit(self.__id, shifts)
+
+#             #         ##################################################################################################################
+                                            
+#             #             # else:
+#             #             #     for j in range(dis): # корректировка траектории если скорость была мала
+#             #             #         linacc[-1-j] = [0.0,0.0,0.0]
+
+#             #     # if (i > 498):
+#             #     #     plt.figure()
+#             #     #     plt.plot(x, ynew, x, yint0, x, yint00, '--', x_mean_vel, mean_vel ) #yint00, yint0, y0 #, x, yint0, x, yint00, '--'
+#             #     #     plt.legend(['data','velocity', 'trajectory'])
+#             #     #     plt.axis([0.0, 3., -2, 2])
+#             #     #     plt.title('Integral estimation from spline')
+#             #     #     plt.show()
+
+#                 if (1) and (sig_time != times[-1]): #shifts != [0.,0.,0.]
+#                     self.sig_status.emit(self.__id, 1)
+#                     #print(times[-1],times[-2])
+
+#             #     # times.append(d['time'])
+#             #     # linacc.append([float(item) for item in d['linacc'] ])
+
+#             #         # check if we need to abort the loop; need to process events to receive signals;
+#             #     App.processEvents()  # this could cause change to self.__abort
+#             #     if self.__abort:
+#             #         # note that "step" value will not necessarily be same for every thread
+#             #         self.sig_msg.emit('Worker #{} aborting work at step {}'.format(self.__id, step))
+#             #         break
+
+#                 if diff >= time_end:
+#                     dt = datetime.now()
+#                     with open(filename, 'a') as the_file:
+#                          the_file.write('\n'.join(el for el in emptylist))
+#                     #print(str(self.port), " - stopped" )  
+#                     #print(M)
+#                      #print(gist_times)
+#                      #print(times)  
+#                     break           
+    
+#             except (KeyboardInterrupt, SystemExit):
+#                 raise
+#             except:
+#                 traceback.print_exc()
+        
+#         ##################################################
