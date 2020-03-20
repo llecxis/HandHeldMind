@@ -42,24 +42,21 @@ def qtr_inv(qtr_a):
     return qtr_inf
 
 def qtr_multiplication(qtr_a, qtr_b): #Multiplication quaternions = A*B
-    # print(vtk.vtkQuaterniond(self.qtrs[1]).ToMatrix3x3([[0,0,0],[0,0,0],[0,0,0]]))
+
     qtr_a = np.array(qtr_a)
     qtr_b = np.array(qtr_b)
     mod_qtr = qtr_a[0]*qtr_a[0] + qtr_a[1]*qtr_a[1] + qtr_a[2]*qtr_a[2] + qtr_a[3]*qtr_a[3] # mod for multiplication of quaternions
     
-    # self.qtrs[i_from_actor] - a - quater
-    # self.qtrs[i_to_actor]   - b - quater
-
     a1 = qtr_a[0]*qtr_b[0] - qtr_a[1]*qtr_b[1] - qtr_a[2]*qtr_b[2] - qtr_a[3]*qtr_b[3]
-    a2 = qtr_a[1]*qtr_b[0] + qtr_a[0]*qtr_b[1] - qtr_a[3]*qtr_b[2] + qtr_a[2]*qtr_b[3]
-    a3 = qtr_a[2]*qtr_b[0] + qtr_a[3]*qtr_b[1] + qtr_a[0]*qtr_b[2] - qtr_a[1]*qtr_b[3]
-    a4 = qtr_a[3]*qtr_b[0] - qtr_a[2]*qtr_b[1] + qtr_a[1]*qtr_b[2] + qtr_a[0]*qtr_b[3]
+    a2 = qtr_a[1]*qtr_b[0] + qtr_a[0]*qtr_b[1] + qtr_a[3]*qtr_b[2] - qtr_a[2]*qtr_b[3]
+    a3 = qtr_a[2]*qtr_b[0] - qtr_a[3]*qtr_b[1] + qtr_a[0]*qtr_b[2] + qtr_a[1]*qtr_b[3]
+    a4 = qtr_a[3]*qtr_b[0] + qtr_a[2]*qtr_b[1] - qtr_a[1]*qtr_b[2] + qtr_a[0]*qtr_b[3]
     
     qtr_mult = np.array([a1/mod_qtr,a2/mod_qtr,a3/mod_qtr,a4/mod_qtr])
     # print(qtr_multiplication)
     return qtr_mult
 
-def qtr_un_calculus(qtr_a,qtr_c): #to find qtr_b in equation qtr_a**qtr_b = qtr_c (where ** - quaterninal multiplication)
+def qtr_un_calculus(qtr_a,qtr_c): #to find qtr_b in equation qtr_c = qtr_a**qtr_b  (where ** - quaterninal multiplication)
     #в последствии будте таблица соответствия актеров и потоков, пока остается константами        
     # print(vtk.vtkQuaterniond(self.qtrs[1]).ToMatrix3x3([[0,0,0],[0,0,0],[0,0,0]]))
     qtr_a = np.array(qtr_a)
@@ -76,6 +73,17 @@ def qtr_un_calculus(qtr_a,qtr_c): #to find qtr_b in equation qtr_a**qtr_b = qtr_
 
     qtr_mult = np.array([a1/mod_qtr,a2/mod_qtr,a3/mod_qtr,a4/mod_qtr])
     return qtr_mult #vtk.vtkQuaterniond(np.array(self.qtrs[1])+np.array(qtr)).Normalized()
+
+def qtr_calculus(qtr_a,qtr_b): #to find qtr_x in equation qtr_a = qtr_x**qtr_b  (where ** - quaterninal multiplication)     
+    mod_qtr = qtr_b[0]*qtr_b[0] + qtr_b[1]*qtr_b[1] + qtr_b[2]*qtr_b[2] + qtr_b[3]*qtr_b[3] # mod^2 for multiplication of quaternions
+
+    a1 = qtr_a[0]*qtr_b[0] + qtr_a[1]*qtr_b[1] + qtr_a[2]*qtr_b[2] + qtr_a[3]*qtr_b[3]
+    a2 = qtr_a[1]*qtr_b[0] - qtr_a[0]*qtr_b[1] + qtr_a[3]*qtr_b[2] - qtr_a[2]*qtr_b[3]
+    a3 = qtr_a[2]*qtr_b[0] - qtr_a[3]*qtr_b[1] - qtr_a[0]*qtr_b[2] + qtr_a[1]*qtr_b[3]
+    a4 = qtr_a[3]*qtr_b[0] + qtr_a[2]*qtr_b[1] - qtr_a[1]*qtr_b[2] - qtr_a[0]*qtr_b[3]
+
+    qtr_mult = np.array([a1/mod_qtr,a2/mod_qtr,a3/mod_qtr,a4/mod_qtr])
+    return qtr_mult
 
 def three_qtr_solve(qtr_c,qtr_a,qtr_b): # C = X*A*B (looking for X)
 
@@ -144,3 +152,4 @@ def three_qtr_multiplication(qtr_a,qtr_b,qtr_c): # X = A*B*C (looking for X)
     qtr_x = np.array([x01,x02,x03,x04])
 
     return qtr_x
+

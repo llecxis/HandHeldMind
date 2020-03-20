@@ -10,7 +10,6 @@ import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
-import Camera_test as ct
 
 class Worker(QObject):
     """
