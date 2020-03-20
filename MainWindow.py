@@ -14,8 +14,6 @@ import traceback
 import Worker_lecxis as Worker
 import Draw
 import QtrCalc as QC
-# import Camera_1 as Ca1
-# import Camera_2 as Ca2
 import Camera_2
 from scipy.spatial.transform import Rotation as R
 
@@ -79,6 +77,15 @@ def NextSet(self, n):                #операция перестановки
         r -= 1
     return True
 
+def getRotFromVtkMtx(vtkMtx):
+    rotMtx = np.zeros((3,3))
+    for i in range(3):
+        for j in range(3):
+            rotMtx[i, j] = vtkMtx.GetElement(i, j)
+    # get rotation from matrix
+    rot = R.from_dcm(rotMtx)
+    return rot
+
 class MainWindow(QMainWindow):   
 
     NUM_THREADS = 3 # number of phones
@@ -97,8 +104,7 @@ class MainWindow(QMainWindow):
         self.setGeometry(self.left, self.top, self.width, self.height)
         
         self.createMenu()
-        self.createSensorsDock()  
-        
+        self.createSensorsDock()
         self.createCentralWidget()
         
         self.createToolBar()        
@@ -134,99 +140,31 @@ class MainWindow(QMainWindow):
         # прописывать обработку всех кликов по кнопкам
 
     def n_qtr_shift(self): #нужно вставаить соответствие между масивами актеров и потоками
-        # temp_mat = np.array([[0,0,0],[0,0,0],[0,0,0]])
-        # sol_mat = np.array([[0,0,0],[0,0,0],[0,0,0]])
-
-        self.qtrs[2] = self.qtr_norm(np.array([-1.0, -0.004, -0.017, 0.008]))
+        
         self.N_arm_pos = np.array([0.95,0.,0.25,0.])
 
         # # ############### get qtr from matrix
         self.N_ref_imu = self.qtrs[2]
         self.N_arm_imu = self.qtrs[1]
         # # ################ get qtr from matrix
-        # self.log_text.append("T - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]) )
 
-        #self.log_text.append(str(self.N_ref_imu) + ' ...  ' + str(np.linalg.norm(self.N_ref_imu)) + '  ....  ' + str(self.qtr_norm(self.N_ref_imu)) + ' ... ' +  str(np.linalg.norm(self.qtr_norm(self.N_ref_imu)))   )
-        # self.log_text.append(str(self.N_arm_pos) + ' ... ' + str(self.qtr_norm(self.N_arm_pos)))
-        # self.log_text.append('[1,0.,0.,0.] -> ' + str(self.n_pos_temp_qtr))
-        
-        # Ivan Equation
-        self.X_qtr = self.three_qtr_solve(self.qtr_inv(self.N_arm_pos),self.qtr_inv(self.N_arm_imu),self.N_ref_imu)
-        self.Z_qtr = self.qtr_inv(self.N_ref_imu)
-        self.Y_qtr = self.N_arm_imu
-        self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
-        # Ivan Equation
+        self.log_text.append("N - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]) )
 
-        
+        self.X_qtr = QC.qtr_calculus(np.array([1.0, 0.0, 0.0, 0.0]), self.N_ref_imu)
 
-        # self.X_qtr = self.three_qtr_solve(self.N_arm_pos, self.qtr_inv(self.N_arm_imu), self.N_ref_imu,)
-        # self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
-        # self.log_text.append('Initial = ' + str(self.three_qtr_multiplication(self.ZYX_qtr, self.qtr_inv(self.qtrs[1]), self.N_ref_imu)) + ' == ' + str(self.N_arm_pos))
+        self.Y_qtr = QC.qtr_calculus(np.array([1.0, 0.0, 0.0, 0.0]), self.N_arm_imu)
 
-        #self.log_text.append(str(self.X_qtr))
+        self.flag_norm = 1
 
-        # self.n_pos_temp_mat = self.scene.mtxRot[4]
-        # self.n_pos_temp_qtr = self.qtr_un_calculus(self.qtrs[0],[0.95,0.,0.25,0.])
-        # self.log_text.append('[1,0.,0.,0.] -> ' + str(self.n_pos_temp_qtr))
-        #
+        self.log_text.append('Initial X_qtr= ' + str(self.X_qtr) )
+        self.log_text.append('Initial Y_qtr= ' + str(self.Y_qtr) )
 
     def t_qtr_shift(self):
         
         self.log_text.append("T - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]) )
 
-        self.qtrs[2] = np.array([-1.0, -0.004, -0.017, 0.008])
         self.T_arm_pos = np.array([-0.7,-0.7,0.,0.]) #([-0.7,-0.7,0.,0.]) # [-0.7,-0.7,0.,0.]
         self.N_arm_pos = np.array([0.95,0.,0.25,0.])
-
-        #  #Sergey ########################################################
-        # T_rotImuArmAtGlob = R.from_quat(self.qtrs[1])
-        # N_rot_arm_imu = R.from_quat(self.N_arm_imu)
-
-        # T_rotArmAtGlob = T_rotImuArmAtGlob * N_rot_arm_imu.inv()
-        # T_mtxArmAtGlob = T_rotArmAtGlob.as_dcm()
-
-        #  # use second column of the matrix which is the Y direction in T-pose
-        # T_Y_dirArmAtGlob = T_mtxArmAtGlob[:,1]
-        # # Compose body rot using 3 vec columns
-        # Z_dirBodyAtGlob = -T_Y_dirArmAtGlob
-        # Y_dirBodyAtGlob = np.array([0, 1, 0])  # y - axis dir
-        # # the third vec is the cross-product of the two
-        # X_dirBodyAtGlob = np.cross(Y_dirBodyAtGlob, Z_dirBodyAtGlob)
-        # # combine as rows and transpose
-        # mtxBodyAtGlob = np.array([X_dirBodyAtGlob, 
-        #                           Y_dirBodyAtGlob, 
-        #                           Z_dirBodyAtGlob]).transpose()
-
-        # self.rotBodyAtGlob = R.from_dcm(mtxBodyAtGlob)
-        # temp_r = self.rotBodyAtGlob.inv()
-        # self.X_qtr = temp_r.as_quat()
-
-        # self.log_text.append("T - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
-
-        # self.log_text.append("Computer get as input " + str(self.qtr_multiplication(self.X_qtr, self.qtrs[1]))        
-
-        ########################################## get matrix from qtr
-
-        right_side = self.three_qtr_multiplication(self.X_qtr,self.qtr_inv(self.qtrs[1]), self.N_ref_imu)
-        
-        self.Y_qtr = self.three_qtr_solve(self.T_arm_pos, right_side, np.array([1.,0.,0.,0.]))
-        self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
-
-        # self.N_arm_imu = self.qtrs[1] #test variant
-        # #self.N_arm_imu is taken from the previous to save N pose
-        # self.N_arm_in_t_pos = self.three_qtr_multiplication(self.X_qtr, self.N_ref_imu, self.N_arm_imu)
-        # self.T_arm_imu = self.qtr_un_calculus(self.N_arm_imu,self.qtrs[1])
-        # self.T_arm_imu = self.qtrs[1]
-        # self.Y_qtr = self.three_qtr_solve(self.T_arm_pos, self.N_arm_pos, self.T_arm_imu)
- 
-        # temp = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv( self.qtrs[1] ), self.N_ref_imu)
-        # self.log_text.append('Initial = ' + str(temp) + ' = ' + str( self.T_arm_pos ) )
-
-        # temp = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv( self.N_arm_imu), self.N_ref_imu)
-        # self.log_text.append('Initial = ' + str(temp) + ' = ' + str( self.N_arm_pos ) )
-
-        #self.log_text.append(str(self.Y_qtr))
-        #self.log_text.append(str(self.YX_qtr))
 
     def qtr_to_mtx(self, qtr):
         end = np.identity(3)
@@ -241,43 +179,8 @@ class MainWindow(QMainWindow):
         return end
 
     def z_qtr_shift(self):
-        
-        self.scene.reInitialize_actors(self.qtrs[2])
 
-        # # video block
-        # if self.video_flag_on == 0:
-        #     self.video_timer = time.time()
-        #     self.start_video()
-        #     # Ca1.start_AVrecording()
-        #     # Ca2.start_AVrecording()
-        #     self.log_text.append('Video_started')
-        #     self.video_flag_on = 1
-        # elif self.video_flag_on == 1:
-        #     self.video_flag_on = 0            
-        #     self.log_text.append('Video_stoped at ' + str(time.time() - self.video_timer ) )
-        #     self.abort_workers() 
-        #     # Ca1.stop_AVrecording()
-        #     # Ca1.file_manager()
-        #     # Ca2.stop_AVrecording()
-        #     # Ca2.file_manager()
-        # else:
-        #     pass
-        # video block
-
-        # self.log_text.append("Z - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
-        # self.Z_arm_pos = np.array([0.7,0.,0.,0.7])
-        # right_side = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv(self.qtrs[1]), self.N_ref_imu)
-        # self.Z_qtr = self.three_qtr_solve(self.Z_arm_pos,right_side, np.array([1.,0.,0.,0.]))
-        # self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
-        # self.log_text.append(str(self.three_qtr_multiplication(self.YX_qtr,self.qtr_inv(self.qtrs[1]),self.qtrs[2])))
-        # self.X_qtr = np.array([1, 0., 0., 0.])
-        # self.Y_qtr = np.array([1, 0., 0., 0.])
-        # self.YX_qtr = np.array([1, 0., 0., 0.])
-        # self.N_arm_imu = np.array([1, 0., 0., 0.])
-        # self.z_pos_temp_mat = self.scene.mtxRot[4]
-        # self.z_pos_temp_qtr = self.qtrs[1]
-        # self.log_text.append(str(self.z_pos_temp_mat))
-
+        self.log_text.append("Z - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]) + " " + str(QC.qtr_multiplication(self.Y_qtr,self.qtrs[1])))
 
     def vtkCall(self):      
         self.play.setDisabled(True)
@@ -356,12 +259,11 @@ class MainWindow(QMainWindow):
         self.scene = Draw.vtpDrawScene()
         directory = 'geometry/'
         obj = get_files(directory)
-        print(obj)
-        self.obj_list = obj
+        rigth_list = ['geometry/hat_jaw.vtp', 'geometry/hat_skull.vtp', 'geometry/hat_spine.vtp', 'geometry/humerus.vtp', 'geometry/humerus_l.vtp', 'geometry/radius_lv.vtp', 'geometry/radius_rv.vtp', 'geometry/scapula.vtp', 'geometry/scapula_l.vtp', 'geometry/thorax.vtp', 'geometry/ulna_lv.vtp', 'geometry/ulna_rv.vtp']
+        rigth_list.append(list(set(obj) ^ set(rigth_list)))
+        self.obj_list = rigth_list
         self.ren = self.scene.initScene_qt(obj)
-        self.initial_qtr_norm()
-
-        
+        self.initial_qtr_norm()        
 
         #Settings
         self.ren.SetBackground(0.2, 0.2, 0.2)
@@ -373,8 +275,7 @@ class MainWindow(QMainWindow):
 
         #start video recording in threads
 
-        # self.start_video()
-        
+        self.start_video()        
 
         # self.controller = threads_qt.Controller()
         # self.controller.app = QCoreApplication([])       #я вообще не понимаю зачем это тут
@@ -403,195 +304,26 @@ class MainWindow(QMainWindow):
     
     def timerCallback(self):
         #сюда преобразование координат qweqrty
-        i_actor = 4
-        #self.temp_qtr = self.qtrs[1]        
-        self.temp_qtr = self.qtr_multiplication(self.ZYX_qtr, self.qtrs[1])
-        #self.temp_qtr = self.three_qtr_multiplication(self.qtr_inv(self.qtrs[2]), self.qtrs[1], self.qtr_inv(self.X_qtr)) Ivan eqution
-        self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[1], i_actor)
 
-        i_actor = 5
-        #self.actors_shift = np.array(self.scene.initial_pos_actors[4]) + np.array(self.scene.mtxRot).dot(np.array(self.scene.initial_pos_actors[5]) - np.array(self.scene.initial_pos_actors[4]))
-        self.shifts[0] = self.shift_calculus(4,i_actor)
-        #self.temp_qtr = self.qtr_calculus(4,i_actor)
-        #self.temp_qtr = self.qtr_multiplication(self.qtrs[0], self.n_pos_temp_qtr)
-        self.temp_qtr = self.qtrs[0]
-        # print(self.actors_shift,self.scene.initial_pos_actors[4])
-        self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
+        if (self.flag_norm == 1):
+            for el in range(len(self.scene.modelActor)):
+                # temp_qtr = QC.qtr_multiplication(self.X_qtr,self.qtrs[2])  
+                # actor_qtr = np.array([1.,0.,0.,0.])
+                temp_shift = np.array([0.,0.,0.])
+                self.motion_flag = np.array([0,[1.,0.,0.,0.]])
+                if (el == 4): # or (el == 10):
+                    # actor_qtr = QC.qtr_multiplication(self.Y_qtr,self.qtrs[1])
+                    # temp_shift = self.shift_calculus(4,el)
+                    self.motion_flag = np.array([1, QC.qtr_multiplication(self.qtrs[1],np.conj(QC.qtr_multiplication(self.X_qtr,self.qtrs[2])))])            
 
-        i_actor = 10
-        self.shifts[0] = self.shift_calculus(4,i_actor)
-        #self.temp_qtr = self.qtr_calculus(4,i_actor)
-        #self.temp_qtr = self.qtr_multiplication(self.qtrs[0], self.n_pos_temp_qtr)
-        self.temp_qtr = self.qtrs[0]
-        self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
-
-        # print(abs(round(self.check[2] - self.qtrs[2][2], 3)), ' ', self.eps)
-        # if (abs(self.check[2] - self.qtrs[2][2]) > self.eps):
-        #     self.check[2] = self.qtrs[2][2]
-        for el in range(len(self.scene.modelActor)):
-            self.scene.SetRefQuatOrientation(self.qtrs[2], self.shifts[0], el) # self.qtr_multiplication(self.scene.initial_pos_actors[el],self.scene.norm_qtr[el])
-                
-        # i_actor = 2
-        # self.shifts[0] = self.shift_calculus(2,i_actor)
-        # #self.temp_qtr = self.qtrs[2] #self.qtr_multiplication(self.qtrs[2], np.array([1.,0.,0.,0.]))
-        # self.temp_qtr = self.qtr_multiplication(self.qtrs[2], np.array([1.,0.,0.,0.]))
-        # #self.log_text.append(str(self.temp_qtr))
-        # self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
-
-        # i_actor = len(self.scene.modelActor)
-        # self.temp_qtr = self.rotBodyAtGlob.as_quat()
-        # self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
+                temp_qtr = QC.qtr_multiplication(self.X_qtr,self.qtrs[2]) # QC.qtr_multiplication(actor_qtr,np.conj(QC.qtr_multiplication(self.X_qtr,self.qtrs[2])))
+                self.scene.SetRefQuatOrientation(temp_qtr, temp_shift, el, self.motion_flag )
 
         self.iren.Render() #NOT: self.ren.Render()
     
-    def shift_calculus(self,i_from_actor,i_to_actor):
+    def shift_calculus(self,i_from_actor,i_to_actor):     # положение от + матрица поворота от*(положение к - положение от) - положение к
         return np.array(self.scene.initial_pos_actors[i_from_actor]) + np.array(self.scene.mtxRot[i_from_actor]).dot(np.array(self.scene.initial_pos_actors[i_to_actor]) - np.array(self.scene.initial_pos_actors[i_from_actor]))- np.array(self.scene.initial_pos_actors[i_to_actor])
-    
-    def qtr_calculus(self,i_from_actor,i_to_actor): #в последствии будте таблица соответствия актеров и потоков, пока остается константами        
-        # print(vtk.vtkQuaterniond(self.qtrs[1]).ToMatrix3x3([[0,0,0],[0,0,0],[0,0,0]]))
-
-        i_from_actor = 1 #в последствии будте таблица соответствия актеров и потоков, пока остается константами      
-        i_to_actor = 0
         
-        mod_qtr = self.qtrs[1][0]*self.qtrs[1][0] + self.qtrs[1][1]*self.qtrs[1][1] + self.qtrs[1][2]*self.qtrs[1][2] + self.qtrs[1][3]*self.qtrs[1][3] # mod for multiplication of quaternions
-        
-        # self.qtrs[i_from_actor] - a - quater
-        # self.qtrs[i_to_actor]   - b - quater
-
-        a1 = self.qtrs[i_from_actor][0]*self.qtrs[i_to_actor][0] - self.qtrs[i_from_actor][1]*self.qtrs[i_to_actor][1] - self.qtrs[i_from_actor][2]*self.qtrs[i_to_actor][2] - self.qtrs[i_from_actor][3]*self.qtrs[i_to_actor][3]
-        a2 = self.qtrs[i_from_actor][1]*self.qtrs[i_to_actor][0] + self.qtrs[i_from_actor][0]*self.qtrs[i_to_actor][1] - self.qtrs[i_from_actor][3]*self.qtrs[i_to_actor][2] + self.qtrs[i_from_actor][2]*self.qtrs[i_to_actor][3]
-        a3 = self.qtrs[i_from_actor][2]*self.qtrs[i_to_actor][0] + self.qtrs[i_from_actor][3]*self.qtrs[i_to_actor][1] + self.qtrs[i_from_actor][0]*self.qtrs[i_to_actor][2] - self.qtrs[i_from_actor][1]*self.qtrs[i_to_actor][3]
-        a4 = self.qtrs[i_from_actor][3]*self.qtrs[i_to_actor][0] - self.qtrs[i_from_actor][2]*self.qtrs[i_to_actor][1] + self.qtrs[i_from_actor][1]*self.qtrs[i_to_actor][2] + self.qtrs[i_from_actor][0]*self.qtrs[i_to_actor][3]
-        
-        qtr_mult = np.array([a1/mod_qtr,a2/mod_qtr,a3/mod_qtr,a4/mod_qtr])
-        # print(qtr_multiplication)
-        return qtr_mult #vtk.vtkQuaterniond(np.array(self.qtrs[1])+np.array(qtr)).Normalized()
-    
-    def qtr_norm(self, temp_qtr):
-        
-        sum = temp_qtr[0]*temp_qtr[0] + temp_qtr[1]*temp_qtr[1] +  temp_qtr[2]*temp_qtr[2] +  temp_qtr[3]*temp_qtr[3]
-
-        temp_qtr = np.array([temp_qtr[0]/sum,temp_qtr[1]/sum,temp_qtr[2]/sum,temp_qtr[3]/sum])
-
-        return temp_qtr
-    
-    def qtr_inv(self, qtr_a):
-
-        a1 = qtr_a[0]
-        a2 = qtr_a[1]
-        a3 = qtr_a[2]
-        a4 = qtr_a[3]
-
-        mod = a1*a1 + a2*a2 + a3*a3 + a4*a4
-
-        qtr_inf = np.array([a1/mod, - a2/mod,- a3/mod, - a4/mod])
-
-        return qtr_inf
-
-    def qtr_multiplication(self,qtr_a, qtr_b): #в последствии будте таблица соответствия актеров и потоков, пока остается константами        
-        # print(vtk.vtkQuaterniond(self.qtrs[1]).ToMatrix3x3([[0,0,0],[0,0,0],[0,0,0]]))
-        qtr_a = np.array(qtr_a)
-        qtr_b = np.array(qtr_b)
-        mod_qtr = qtr_a[0]*qtr_a[0] + qtr_a[1]*qtr_a[1] + qtr_a[2]*qtr_a[2] + qtr_a[3]*qtr_a[3] # mod for multiplication of quaternions
-        
-        # self.qtrs[i_from_actor] - a - quater
-        # self.qtrs[i_to_actor]   - b - quater
-
-        a1 = qtr_a[0]*qtr_b[0] - qtr_a[1]*qtr_b[1] - qtr_a[2]*qtr_b[2] - qtr_a[3]*qtr_b[3]
-        a2 = qtr_a[1]*qtr_b[0] + qtr_a[0]*qtr_b[1] - qtr_a[3]*qtr_b[2] + qtr_a[2]*qtr_b[3]
-        a3 = qtr_a[2]*qtr_b[0] + qtr_a[3]*qtr_b[1] + qtr_a[0]*qtr_b[2] - qtr_a[1]*qtr_b[3]
-        a4 = qtr_a[3]*qtr_b[0] - qtr_a[2]*qtr_b[1] + qtr_a[1]*qtr_b[2] + qtr_a[0]*qtr_b[3]
-        
-        qtr_mult = np.array([a1/mod_qtr,a2/mod_qtr,a3/mod_qtr,a4/mod_qtr])
-        # print(qtr_multiplication)
-        return qtr_mult
-
-    def qtr_un_calculus(self,qtr_a,qtr_c): #to find qtr_b in equation qtr_a**qtr_b = qtr_c (where ** - quaterninal multiplication)
-        #в последствии будте таблица соответствия актеров и потоков, пока остается константами        
-        # print(vtk.vtkQuaterniond(self.qtrs[1]).ToMatrix3x3([[0,0,0],[0,0,0],[0,0,0]]))
-        qtr_a = np.array(qtr_a)
-        qtr_c = np.array(qtr_c)
-        mod_qtr = -1*(qtr_a[0]*qtr_a[0] + qtr_a[1]*qtr_a[1] + qtr_a[2]*qtr_a[2] + qtr_a[3]*qtr_a[3]) # mod for multiplication of quaternions
-        
-        # self.qtrs[i_from_actor] - a - quater
-        # self.qtrs[i_to_actor]   - c - quater
-
-        a1 = -1*qtr_a[0]*qtr_c[0] - qtr_a[1]*qtr_c[1] - qtr_a[2]*qtr_c[2] - qtr_a[3]*qtr_c[3]
-        a2 = qtr_a[1]*qtr_c[0] - qtr_a[0]*qtr_c[1] - qtr_a[3]*qtr_c[2] + qtr_a[2]*qtr_c[3]
-        a3 = qtr_a[2]*qtr_c[0] + qtr_a[3]*qtr_c[1] - qtr_a[0]*qtr_c[2] - qtr_a[1]*qtr_c[3]
-        a4 = qtr_a[3]*qtr_c[0] - qtr_a[2]*qtr_c[1] + qtr_a[1]*qtr_c[2] - qtr_a[0]*qtr_c[3]
-
-        qtr_mult = np.array([a1/mod_qtr,a2/mod_qtr,a3/mod_qtr,a4/mod_qtr])
-        return qtr_mult #vtk.vtkQuaterniond(np.array(self.qtrs[1])+np.array(qtr)).Normalized()
-
-    def three_qtr_solve(self,qtr_c,qtr_a,qtr_b): # C = X*A*B (looking for X)
-
-        a1 = qtr_a[0]
-        a2 = qtr_a[1]
-        a3 = qtr_a[2]
-        a4 = qtr_a[3]
-
-        b1 = qtr_b[0]
-        b2 = qtr_b[1]
-        b3 = qtr_b[2]
-        b4 = qtr_b[3]
-
-        mod_ab = (a1*a1+a2*a2+a3*a3+a4*a4)*(b1*b1+b2*b2+b3*b3+b4*b4)
-
-        c1 = qtr_c[0]
-        c2 = qtr_c[1]
-        c3 = qtr_c[2]
-        c4 = qtr_c[3]
-
-        x01 = (-a3*b3*c1-a4*b4*c1-a4*b3*c2+a3*b4*c2+a3*b1*c3+a4*b2*c3+a4*b1*c4-a3*b2*c4+a2*(-b2*c1+b1*c2-b4*c3+b3*c4)+a1*(b1*c1+b2*c2+b3*c3+b4*c4))/mod_ab
-                
-        x02 = (a4*b3*c1-a3*b4*c1-a3*b3*c2-a4*b4*c2-a4*b1*c3+a3*b2*c3+a3*b1*c4+a4*b2*c4+a1*(-b2*c1+b1*c2-b4*c3+b3*c4)-a2*(b1*c1+b2*c2+b3*c3+b4*c4))/mod_ab
-                
-        x03 = (-a1*b3*c1+a2*b4*c1+a2*b3*c2+a1*b4*c2+a1*b1*c3-a2*b2*c3-a2*b1*c4-a1*b2*c4+a4*(-b2*c1+b1*c2-b4*c3+b3*c4)-a3*(b1*c1+b2*c2+b3*c3+b4*c4))/mod_ab
-        
-        x04 = (-a2*b3*c1-a1*b4*c1-a1*b3*c2+a2*b4*c2+a2*b1*c3+a1*b2*c3+a1*b1*c4-a2*b2*c4+a3*(b2*c1-b1*c2+b4*c3-b3*c4)-a4*(b1*c1+b2*c2+b3*c3+b4*c4))/mod_ab
-
-        qtr_x = np.array([x01,x02,x03,x04])
-
-        return qtr_x
-
-    def three_qtr_multiplication(self,qtr_a,qtr_b,qtr_c): # X = A*B*C (looking for X)
-
-        a1 = qtr_a[0]
-        a2 = qtr_a[1]
-        a3 = qtr_a[2]
-        a4 = qtr_a[3]
-
-        b1 = qtr_b[0]
-        b2 = qtr_b[1]
-        b3 = qtr_b[2]
-        b4 = qtr_b[3]
-
-        c1 = qtr_c[0]
-        c2 = qtr_c[1]
-        c3 = qtr_c[2]
-        c4 = qtr_c[3]
-
-        x01 = -a4*(b4*c1-b3*c2+b2*c3+b1*c4)-a3*(b3*c1+b4*c2+b1*c3-b2*c4)-a2*(b2*c1+b1*c2-b4*c3+b3*c4)+a1*(b1*c1-b2*c2-b3*c3-b4*c4)
-
-        x02 = a3*(b4*c1-b3*c2+b2*c3+b1*c4)-a4*(b3*c1+b4*c2+b1*c3-b2*c4)+a1*(b2*c1+b1*c2-b4*c3+b3*c4)+a2*(b1*c1-b2*c2-b3*c3-b4*c4)
-
-        x03 = -a2*(b4*c1-b3*c2+b2*c3+b1*c4)+a1*(b3*c1+b4*c2+b1*c3-b2*c4)+a4*(b2*c1+b1*c2-b4*c3+b3*c4)+a3*(b1*c1-b2*c2-b3*c3-b4*c4)
-
-        x04 = a1*(b4*c1-b3*c2+b2*c3+b1*c4)+a2*(b3*c1+b4*c2+b1*c3-b2*c4)-a3*(b2*c1+b1*c2-b4*c3+b3*c4)+a4*(b1*c1-b2*c2-b3*c3-b4*c4)
-
-        # x01 = (a1*b1-a2*b2-a3*b3-a4*b4)*c1-(a2*b1+a1*b2-a4*b3+a3*b4)*c2-(a3*b1+a4*b2+a1*b3-a2*b4)*c3-(a4*b1-a3*b2+a2*b3+a1*b4)*c4
-            
-        # x02 = (a2*b1+a1*b2-a4*b3+a3*b4)*c1+(a1*b1-a2*b2-a3*b3-a4*b4)*c2-(a4*b1-a3*b2+a2*b3+a1*b4)*c3+(a3*b1+a4*b2+a1*b3-a2*b4)*c4
-            
-        # x03 = (a3*b1+a4*b2+a1*b3-a2*b4)*c1+(a4*b1-a3*b2+a2*b3+a1*b4)*c2+(a1*b1-a2*b2-a3*b3-a4*b4)*c3-(a2*b1+a1*b2-a4*b3+a3*b4)*c4
-            
-        # x04 = (a4*b1-a3*b2+a2*b3+a1*b4)*c1-(a3*b1+a4*b2+a1*b3-a2*b4)*c2+(a2*b1+a1*b2-a4*b3+a3*b4)*c3+(a1*b1-a2*b2-a3*b3-a4*b4)*c4
-
-        qtr_x = np.array([x01,x02,x03,x04])
-
-        return qtr_x
-    
     def initial_qtr_norm(self):
         self.n_pos_temp_qtr = np.array([0.95, 0., 0.25, 0.])
         self.t_pos_temp_qtr = np.array([0.5, 0.5, 0.5, 0.5])
@@ -603,6 +335,8 @@ class MainWindow(QMainWindow):
         self.N_arm_imu = np.array([1, 0., 0., 0.])
         self.check = np.array([1.,0.,0.,0.])
         self.eps = 0.01
+        self.flag_norm = 0
+        self.motion_flag = list()
 
     def start_video(self):
         self.frame_name = 'frame_'
@@ -614,8 +348,6 @@ class MainWindow(QMainWindow):
             thread.setObjectName('thread_' + str(-idx))
             
             temp = Camera_2.VideoRecorder(self.camera_paths[idx], self.frame_name + str(idx), self.file_name + str(idx) + str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.avi')
-            # temp.cam(self.camera_paths[idx], self.frame_name + str(idx), self.file_name + str(idx) + '.avi')
-            #temp.cam(self.camera_paths[idx], self.frame_name + str(idx), self.file_name + str(idx) + '.avi')
 
             self.__threads.append((thread, temp))
             temp.moveToThread(thread)
@@ -654,7 +386,6 @@ class MainWindow(QMainWindow):
 
             # control worker:
             self.sig_abort_workers.connect(worker.abort)
-
             # get read to start worker:
             # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
             thread.started.connect(worker.work) #(self.port)
