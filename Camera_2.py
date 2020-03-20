@@ -25,8 +25,8 @@ class VideoRecorder(QObject):
         end = 100
 
         local_path = os.getcwd()
-        file_path = os.path.join(local_path,'new_data/',self.filename)
-
+        file_path = os.path.join(local_path,self.filename)
+        #print(file_path)
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         self.out = cv2.VideoWriter(file_path,fourcc, 25.0, (720,1280))
         while(self.cap.isOpened()):
