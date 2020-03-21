@@ -106,7 +106,7 @@ class Worker(QObject):
 
             # filename = self.file_prefix + str(self.port)+ dt.isoformat() + '.csv'
             with open(filename, 'a') as the_file:
-                the_file.write('#id, time, calib_status, lin_acc, rot_vec, gyr, acc, grav, mag\n')
+                the_file.write('#id, computer time,time, calib_status, rot_vec,,,, 					lin_acc,,, 						grav\n')
             
             self.receive_data(filename)
 
@@ -223,7 +223,7 @@ class Worker(QObject):
                 diff = time.time() - beg
 
                 # row = [str(datetime.fromtimestamp(timestamp).strftime("%H:%M:%S:%f"))] 
-                emptylist.append([d['id'],str(datetime.fromtimestamp(timestamp).strftime("%H:%M:%S:%f")),d['time'],d['calib_status'],*d['rotvec'],*d['linacc'],*d['grav']])
+                emptylist.append([d['id'],str(timestamp),d['time'],d['calib_status'],*d['rotvec'],*d['linacc'],*d['grav']])
                 # emptylist.append(', '.join(str(el) for el in row))
 
                 #self.sig_msg.emit(str([str(datetime.fromtimestamp(timestamp))] +

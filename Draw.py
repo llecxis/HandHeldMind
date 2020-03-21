@@ -1,20 +1,18 @@
-import sys
+#import sys
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import vtk
-import math
+#import math
 import numpy as np
-import time
+#import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-import socket
-import traceback
 import QtrCalc as QC
 from scipy.spatial.transform import Rotation as R
 
 class vtpDrawScene: 
-    def SetQuatOrientation_old( self, quaternion, shift, i_actor ): #function to rotate one element around his own origine point
+    def SetQuatOrientation( self, quaternion, shift, i_actor ):
         if not self.iniOk_qt :
             raise Exception("vtpDrawScene not initialized. Call initScene() first")
 
@@ -22,31 +20,18 @@ class vtpDrawScene:
         # self.mtxRot =  [[0,0,0],[0,0,0],[0,0,0]]
 
         #quat = QC.qtr_multiplication(quaternion,self.norm_qtr[i_actor])
-        # self.mtxRot[i_actor] = self.modelActor[i_actor].GetMatrix()
 
         vtk.vtkMath().QuaternionToMatrix3x3(quaternion, self.mtxRot[i_actor])
 
-        # mtxTr01 = self.modelActor[i_actor].GetMatrix()
-        # mtx = np.identity(3)
-
-        # for i in range(2):
-        #     for j in range(2) :
-        #         mtx[i][j] = mtxTr01.GetElement(i, j)        
-    
+       
         # norm matrix
-        # self.mtxRot[i_actor] = mtx.dot(np.array(self.mtxRot[i_actor])) #np.array(self.mtxRot[i_actor]).dot(np.array(self.norm_mat[i_actor]))
+        #self.mtxRot[i_actor] = np.array(self.mtxRot[i_actor])  #np.array(self.mtxRot[i_actor]).dot(np.array(self.norm_mat[i_actor]))
+
         # Rotation: convert 3x3 to 4x4 matrix
-        # mtxTr2 = vtk.vtkMatrix4x4() # identity mtx
-
-
         mtxTr2 = vtk.vtkMatrix4x4() # identity mtx
         for i in range(3):
-            for j in range(3):
+            for j in range(3) :
                 mtxTr2.SetElement(i, j, self.mtxRot[i_actor][i][j])
-        # print(mtxTr02)
-        
-        # mtxTr01 = self.modelActor[i_actor].GetMatrix()
-        # vtk.vtkMatrix4x4().Multiply4x4(mtxTr01, mtxTr02, mtxTr2)
     
         # three transforms:
         # 1. move the object so the rotation center is in the coord center  
@@ -54,34 +39,33 @@ class vtpDrawScene:
         origin = np.array(self.modelActor[i_actor].GetOrigin())
         
         position = np.array(self.modelActor[i_actor].GetPosition())
-
-        # trans = origin
-        # trans = origin + position
+        #trans = origin + position
         trans = position
-        # trans = np.array([0.,0.,0.])       
         tr.Translate(-trans)
         mtxTr1 = tr.GetMatrix()
-
+        
         # 2. rotate around coord center using mtxTr2
         mtxTr12 = vtk.vtkMatrix4x4()
-        vtk.vtkMatrix4x4().Multiply4x4(mtxTr2, mtxTr1, mtxTr12)
+        vtk.vtkMatrix4x4().Multiply4x4 (mtxTr2, mtxTr1, mtxTr12)
         
         ## 3. move the object back
         tr = vtk.vtkTransform()
-
         tr.Translate(trans + np.array(shift))
         mtxTr3 = tr.GetMatrix()
         mtxTr123 = vtk.vtkMatrix4x4()
-        vtk.vtkMatrix4x4().Multiply4x4(mtxTr3, mtxTr12, mtxTr123)
+        vtk.vtkMatrix4x4().Multiply4x4 (mtxTr3, mtxTr12, mtxTr123)
         
         tr = vtk.vtkTransform()
-        tr.PreMultiply() 
+        tr.PreMultiply()  
+    #    tr.PostMultiply()  
         tr.Concatenate(mtxTr123) 
         self.modelActor[i_actor].SetUserTransform(tr)
 
-
+        # self.ren.Render()
+        # return self.ren
+        # self.renWin.Render()
     
-    def initScene_qt(self, obj): #initialize alll actors
+    def initScene_qt(self, obj):
         reader = list()
         modelMapper = list()
         self.modelActor = list()
@@ -119,9 +103,17 @@ class vtpDrawScene:
             # Get center of the bounding box           
             
             origin = self.modelActor[i].GetCenter()
-
+            
+            #
             #  Set rotation center
             self.modelActor[i].SetOrigin(origin)
+        
+        
+        
+        # self.axesActor = vtk.vtkAxesActor()
+        # self.modelActor.append(vtk.vtkActor())       
+        # self.axesActor.SetAxisLabels(1) # 0/1 to turn off/on axis labels
+        # renCornerR.AddActor(self.axesActor)
 
         #Initial conditions for bones
         self.initial_pos_actors = np.array([[0,0,0],[0,0,0],[0,0,0],[-0.016, -0.006, 0.163],[-0.016, -0.006, -0.163],[-0.01,  -0.312, -0.173],[-0.01,  -0.312, 0.173],[-0.01, 0.024, 0.166],[-0.01, 0.024, -0.166],[0,0,0],[-0.005, -0.296, -0.153],[-0.005, -0.296,  0.153]])
@@ -129,7 +121,8 @@ class vtpDrawScene:
             # tr = vtk.vtkTransform()            
             # tr.Translate(self.initial_pos_actors[el])
             self.norm_qtr.append(np.array([1.,0.,0.,0.]))
-            self.modelActor[el].SetPosition(self.initial_pos_actors[el])           
+            self.modelActor[el].SetPosition(self.initial_pos_actors[el])
+        # print(len(self.norm_qtr))             
 
             
         axes = vtk.vtkAxesActor()
@@ -155,86 +148,51 @@ class vtpDrawScene:
         self.iniOk_qt = True
         return self.ren
 
-    # def SetQuatOrientation( self, quaternion, shift, i_actor ): #function to rotate one element around his own origine point
-    #     if not self.iniOk_qt :
-    #         raise Exception("vtpDrawScene not initialized. Call initScene() first")
 
-    #     vtk.vtkMath().QuaternionToMatrix3x3(quaternion, self.mtxRot[i_actor])
-    #     # Rotation: convert 3x3 to 4x4 matrix
-    #     mtxTr2 = vtk.vtkMatrix4x4() # identity mtx
-    #     for i in range(3):
-    #         for j in range(3) :
-    #             mtxTr2.SetElement(i, j, self.mtxRot[i_actor][i][j])
-
-    def SetRefQuatOrientation( self, quaternion, shift, i_actor, motion_flag ): #function to rotate all elements around origine
+    def SetRefQuatOrientation( self, quaternion, shift, i_actor ):
         if not self.iniOk_qt :
             raise Exception("vtpDrawScene not initialized. Call initScene() first")
 
-        mtxRot = np.identity(3)
-        vtk.vtkMath().QuaternionToMatrix3x3(quaternion, mtxRot)
+        #quat = QC.qtr_multiplication(quaternion,self.norm_qtr[i_actor])
+
+        vtk.vtkMath().QuaternionToMatrix3x3(quaternion, self.mtxRot[i_actor])
 
         # Rotation: convert 3x3 to 4x4 matrix
-        mtxTr = vtk.vtkMatrix4x4() # identity mtx
+        mtxTr2 = vtk.vtkMatrix4x4() # identity mtx
         for i in range(3):
             for j in range(3) :
-                mtxTr.SetElement(i, j, mtxRot[i][j])
-        # print('step 0',mtxTr)
-
-        if (motion_flag[0] == 1):
-
-            mtxRot = np.identity(3)
-            vtk.vtkMath().QuaternionToMatrix3x3(motion_flag[1], mtxRot)
-
-            # Rotation: convert 3x3 to 4x4 matrix
-            mtxTr2 = vtk.vtkMatrix4x4() # identity mtx
-            for i in range(3):
-                for j in range(3) :
-                    mtxTr2.SetElement(i, j, mtxRot[i][j])
-
-            # three transforms:
-            # 1. move the object so the rotation center is in the coord center  
-            tr = vtk.vtkTransform()
-            # origin = np.array(self.modelActor[i_actor].GetOrigin()) # use if we need rotation in geometric centre            
-            position = np.array(self.modelActor[i_actor].GetPosition()) #use if we need rotation in local FOR
-            # global_origin = np.array([0.,0.,0.]) #when we need rotation in global FOR
-            # trans = origin
-            # trans = origin + position
-            trans = position
-            # trans =  global_origin    
-            tr.Translate(-trans)
-            mtxTr1 = tr.GetMatrix()
-           
-
-            # print('step 1', mtxTr1)
-
-            # 2. rotate around coord center using mtxTr2
-            mtxTr12 = vtk.vtkMatrix4x4()
-            vtk.vtkMatrix4x4().Multiply4x4(mtxTr2, mtxTr1, mtxTr12)
-
-            # print('step 2', mtxTr12)
-            # print('step 2.2', mtxTr2)
-
-            
-            ## 3. move the object back
-            tr = vtk.vtkTransform()
-            tr.Translate(trans + np.array(shift))
-
-            mtxTr3 = tr.GetMatrix()
-            mtxTr123 = vtk.vtkMatrix4x4()
-            vtk.vtkMatrix4x4().Multiply4x4(mtxTr3, mtxTr12, mtxTr123)
-            # print('step 3', mtxTr)
-
-            mtxTr0 = mtxTr
-            mtxTr = vtk.vtkMatrix4x4()
-            vtk.vtkMatrix4x4().Multiply4x4(mtxTr0, mtxTr123, mtxTr)
-
-            
+                mtxTr2.SetElement(i, j, self.mtxRot[i_actor][i][j])
+    
+        # three transforms:
+        # 1. move the object so the rotation center is in the coord center
+        # tr = vtk.vtkTransform()
+        # origin = np.array(self.modelActor[i_actor].GetOrigin())
+        
+        # position = np.array(self.modelActor[i_actor].GetPosition())
+        # #trans = origin + position
+        # trans = position
+        # tr.Translate(-trans)
+        # mtxTr1 = tr.GetMatrix()
+        
+        # 2. rotate around coord center using mtxTr2
+        # mtxTr12 = vtk.vtkMatrix4x4()
+        # vtk.vtkMatrix4x4().Multiply4x4 (mtxTr2, mtxTr1, mtxTr12)
+        
+        ## 3. move the object back
+        # tr = vtk.vtkTransform()
+        # tr.Translate(trans + np.array(shift))
+        # mtxTr3 = tr.GetMatrix()
+        # mtxTr123 = vtk.vtkMatrix4x4()
+        # vtk.vtkMatrix4x4().Multiply4x4 (mtxTr3, mtxTr12, mtxTr123)
+        
         tr = vtk.vtkTransform()
         tr.PreMultiply()  
-        tr.Concatenate(mtxTr)
+        tr.Concatenate(mtxTr2)
         self.modelActor[i_actor].SetUserTransform(tr)
 
-
+        # self.ren.Render()
+        # return self.ren
+        # self.renWin.Render()
 
     def __init__(self):
         self.iniOk = False
