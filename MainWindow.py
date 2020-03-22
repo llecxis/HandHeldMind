@@ -4,47 +4,29 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 import vtk
-import math
+#import math
 import numpy as np
 import time
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
-
-import Worker_lecxis as Worker
+import Worker as Worker
 import Draw
 import QtrCalc as QC
-import Camera_2
+import Camera_2 
 from scipy.spatial.transform import Rotation as R
-
-def trap_exc_during_debug(*args):
-    # when app raises uncaught exception, print info
-    print(args)
-
-# install exception hook: without this, uncaught exception would cause application to exit
-sys.excepthook = trap_exc_during_debug
+import network
+import os
+from scipy import interpolate
+from utils import trap_exc_during_debug
 
 def get_files(directory):
-    import os
     files = os.listdir(directory)
     for i in range(0,len(files)):
         files[i] = directory + files[i]
     return files
 
-def parse(mes):
-    mes = mes.decode("utf-8").replace(" ", "")
-    if (mes[0] == "#") :
-        print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
-        d = 1
-    else :
-        tm = mes.split("#")[0]
-        d = dict([(el.split(",")[0], el.split(",")[1:]) for el in mes.split("#")[1:]])
-        d["time"] = tm
-    
-    return d
-
 def integ(x, tck, constant = 10e-9):
-    from scipy import interpolate
     x = np.atleast_1d(x)
     out = np.zeros(x.shape, dtype=x.dtype)
     for n in range(len(out)):
@@ -53,7 +35,7 @@ def integ(x, tck, constant = 10e-9):
     return out
 
 def swap(self, i, j): #поменять местами два элемента массива
-    s = self.a[i]    
+    s = self.a[i]
     self.a[i] = self.a[j]
     self.a[j] = s
 
@@ -77,19 +59,10 @@ def NextSet(self, n):                #операция перестановки
         r -= 1
     return True
 
-def getRotFromVtkMtx(vtkMtx):
-    rotMtx = np.zeros((3,3))
-    for i in range(3):
-        for j in range(3):
-            rotMtx[i, j] = vtkMtx.GetElement(i, j)
-    # get rotation from matrix
-    rot = R.from_dcm(rotMtx)
-    return rot
-
 class MainWindow(QMainWindow):   
 
-    NUM_THREADS = 3 # number of phones
-    sig_abort_workers = pyqtSignal()
+    NUM_THREADS = 5 # number of phones
+    sig_abort = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -98,23 +71,27 @@ class MainWindow(QMainWindow):
         self.left = 500
         self.width = 1000
         self.height = 800
+        self.WorkerAdress = list()
+        self.num_workers = 0
         
         self.setWindowIcon(QtGui.QIcon("icon.png"))
         self.setWindowTitle(self.title)
         self.setGeometry(self.left, self.top, self.width, self.height)
         
         self.createMenu()
-        self.createSensorsDock()
-        self.createCentralWidget()
-        
-        self.createToolBar()        
+        self.createSensorsDock()  
 
-        self.createExplorerDock() 
+        self.createToolBar()  
+
+        self.createExplorerDock()     
         
         self.createLogDockWidget()
         
+        self.createCentralWidget()  
+
         self.configureClicks()
-        
+
+        # TODO: initialize video recorder        
 
         self.log_text.append("Initialization Ok")
         #self.log_text.append()
@@ -186,11 +163,13 @@ class MainWindow(QMainWindow):
         self.play.setDisabled(True)
         self.stop.setEnabled(True)
         self.timer.start(self.timeStep)
+        # TODO: start video recording 
 
     def vtkEndCall(self):
         self.stop.setDisabled(True)
         self.play.setEnabled(True)
         self.timer.stop()
+        # TODO: stop video recording
 
     def KeyPress(self,obj, event):
         import re
@@ -254,7 +233,6 @@ class MainWindow(QMainWindow):
         buttons_layout.addWidget(self.tuning_z)
         buttons_layout.addStretch(1)
 
-        
         #Create
         self.scene = Draw.vtpDrawScene()
         directory = 'geometry/'
@@ -263,7 +241,8 @@ class MainWindow(QMainWindow):
         rigth_list.append(list(set(obj) ^ set(rigth_list)))
         self.obj_list = rigth_list
         self.ren = self.scene.initScene_qt(obj)
-        self.initial_qtr_norm()        
+        self.initial_qtr_norm()
+        
 
         #Settings
         self.ren.SetBackground(0.2, 0.2, 0.2)
@@ -275,7 +254,8 @@ class MainWindow(QMainWindow):
 
         #start video recording in threads
 
-        self.start_video()        
+        #self.start_video()
+        
 
         # self.controller = threads_qt.Controller()
         # self.controller.app = QCoreApplication([])       #я вообще не понимаю зачем это тут
@@ -304,26 +284,177 @@ class MainWindow(QMainWindow):
     
     def timerCallback(self):
         #сюда преобразование координат qweqrty
-
-        if (self.flag_norm == 1):
-            for el in range(len(self.scene.modelActor)):
-                # temp_qtr = QC.qtr_multiplication(self.X_qtr,self.qtrs[2])  
-                # actor_qtr = np.array([1.,0.,0.,0.])
-                temp_shift = np.array([0.,0.,0.])
-                self.motion_flag = np.array([0,[1.,0.,0.,0.]])
-                if (el == 4): # or (el == 10):
-                    # actor_qtr = QC.qtr_multiplication(self.Y_qtr,self.qtrs[1])
-                    # temp_shift = self.shift_calculus(4,el)
-                    self.motion_flag = np.array([1, QC.qtr_multiplication(self.qtrs[1],np.conj(QC.qtr_multiplication(self.X_qtr,self.qtrs[2])))])            
-
-                temp_qtr = QC.qtr_multiplication(self.X_qtr,self.qtrs[2]) # QC.qtr_multiplication(actor_qtr,np.conj(QC.qtr_multiplication(self.X_qtr,self.qtrs[2])))
-                self.scene.SetRefQuatOrientation(temp_qtr, temp_shift, el, self.motion_flag )
-
-        self.iren.Render() #NOT: self.ren.Render()
-    
-    def shift_calculus(self,i_from_actor,i_to_actor):     # положение от + матрица поворота от*(положение к - положение от) - положение к
-        return np.array(self.scene.initial_pos_actors[i_from_actor]) + np.array(self.scene.mtxRot[i_from_actor]).dot(np.array(self.scene.initial_pos_actors[i_to_actor]) - np.array(self.scene.initial_pos_actors[i_from_actor]))- np.array(self.scene.initial_pos_actors[i_to_actor])
         
+        try:
+            if (len(self.qtrs) > 0 ):    
+        #сюда преобразование координат qweqrty
+                if (self.flag_norm == 1):
+                    for el in range(len(self.scene.modelActor)):
+                        # temp_qtr = QC.qtr_multiplication(self.X_qtr,self.qtrs[2])  
+                        # actor_qtr = np.array([1.,0.,0.,0.])
+                        temp_shift = np.array([0.,0.,0.])
+                        self.motion_flag = np.array([0,[1.,0.,0.,0.]])
+                        if (el == 4): # or (el == 10):
+                            # actor_qtr = QC.qtr_multiplication(self.Y_qtr,self.qtrs[1])
+                            # temp_shift = self.shift_calculus(4,el)
+                            self.motion_flag = np.array([1, QC.qtr_multiplication(self.qtrs[1],np.conj(QC.qtr_multiplication(self.X_qtr,self.qtrs[2])))])            
+
+                        temp_qtr = QC.qtr_multiplication(self.X_qtr,self.qtrs[2]) # QC.qtr_multiplication(actor_qtr,np.conj(QC.qtr_multiplication(self.X_qtr,self.qtrs[2])))
+                        self.scene.SetRefQuatOrientation(temp_qtr, temp_shift, el, self.motion_flag )
+
+                    self.iren.Render() #NOT: self.ren.Render()
+                print("No data")
+        except:
+            print("No worker ", i_actor) 
+    
+    def shift_calculus(self,i_from_actor,i_to_actor):
+        return np.array(self.scene.initial_pos_actors[i_from_actor]) + np.array(self.scene.mtxRot[i_from_actor]).dot(np.array(self.scene.initial_pos_actors[i_to_actor]) - np.array(self.scene.initial_pos_actors[i_from_actor]))- np.array(self.scene.initial_pos_actors[i_to_actor])
+    
+    def qtr_calculus(self,i_from_actor,i_to_actor): #в последствии будте таблица соответствия актеров и потоков, пока остается константами        
+        # print(vtk.vtkQuaterniond(self.qtrs[1]).ToMatrix3x3([[0,0,0],[0,0,0],[0,0,0]]))
+
+        i_from_actor = 1 #в последствии будте таблица соответствия актеров и потоков, пока остается константами      
+        i_to_actor = 0
+        
+        mod_qtr = self.qtrs[1][0]*self.qtrs[1][0] + self.qtrs[1][1]*self.qtrs[1][1] + self.qtrs[1][2]*self.qtrs[1][2] + self.qtrs[1][3]*self.qtrs[1][3] # mod for multiplication of quaternions
+        
+        # self.qtrs[i_from_actor] - a - quater
+        # self.qtrs[i_to_actor]   - b - quater
+
+        a1 = self.qtrs[i_from_actor][0]*self.qtrs[i_to_actor][0] - self.qtrs[i_from_actor][1]*self.qtrs[i_to_actor][1] - self.qtrs[i_from_actor][2]*self.qtrs[i_to_actor][2] - self.qtrs[i_from_actor][3]*self.qtrs[i_to_actor][3]
+        a2 = self.qtrs[i_from_actor][1]*self.qtrs[i_to_actor][0] + self.qtrs[i_from_actor][0]*self.qtrs[i_to_actor][1] - self.qtrs[i_from_actor][3]*self.qtrs[i_to_actor][2] + self.qtrs[i_from_actor][2]*self.qtrs[i_to_actor][3]
+        a3 = self.qtrs[i_from_actor][2]*self.qtrs[i_to_actor][0] + self.qtrs[i_from_actor][3]*self.qtrs[i_to_actor][1] + self.qtrs[i_from_actor][0]*self.qtrs[i_to_actor][2] - self.qtrs[i_from_actor][1]*self.qtrs[i_to_actor][3]
+        a4 = self.qtrs[i_from_actor][3]*self.qtrs[i_to_actor][0] - self.qtrs[i_from_actor][2]*self.qtrs[i_to_actor][1] + self.qtrs[i_from_actor][1]*self.qtrs[i_to_actor][2] + self.qtrs[i_from_actor][0]*self.qtrs[i_to_actor][3]
+        
+        qtr_mult = np.array([a1/mod_qtr,a2/mod_qtr,a3/mod_qtr,a4/mod_qtr])
+        # print(qtr_multiplication)
+        return qtr_mult #vtk.vtkQuaterniond(np.array(self.qtrs[1])+np.array(qtr)).Normalized()
+    
+    def qtr_norm(self, temp_qtr):
+        
+        sum = temp_qtr[0]*temp_qtr[0] + temp_qtr[1]*temp_qtr[1] +  temp_qtr[2]*temp_qtr[2] +  temp_qtr[3]*temp_qtr[3]
+
+        temp_qtr = np.array([temp_qtr[0]/sum,temp_qtr[1]/sum,temp_qtr[2]/sum,temp_qtr[3]/sum])
+
+        return temp_qtr
+    
+    def qtr_inv(self, qtr_a):
+
+        a1 = qtr_a[0]
+        a2 = qtr_a[1]
+        a3 = qtr_a[2]
+        a4 = qtr_a[3]
+
+        mod = a1*a1 + a2*a2 + a3*a3 + a4*a4
+
+        qtr_inf = np.array([a1/mod, - a2/mod,- a3/mod, - a4/mod])
+
+        return qtr_inf
+
+    def qtr_multiplication(self,qtr_a, qtr_b): #в последствии будте таблица соответствия актеров и потоков, пока остается константами        
+        # print(vtk.vtkQuaterniond(self.qtrs[1]).ToMatrix3x3([[0,0,0],[0,0,0],[0,0,0]]))
+        qtr_a = np.array(qtr_a)
+        qtr_b = np.array(qtr_b)
+        mod_qtr = qtr_a[0]*qtr_a[0] + qtr_a[1]*qtr_a[1] + qtr_a[2]*qtr_a[2] + qtr_a[3]*qtr_a[3] # mod for multiplication of quaternions
+        
+        # self.qtrs[i_from_actor] - a - quater
+        # self.qtrs[i_to_actor]   - b - quater
+
+        a1 = qtr_a[0]*qtr_b[0] - qtr_a[1]*qtr_b[1] - qtr_a[2]*qtr_b[2] - qtr_a[3]*qtr_b[3]
+        a2 = qtr_a[1]*qtr_b[0] + qtr_a[0]*qtr_b[1] - qtr_a[3]*qtr_b[2] + qtr_a[2]*qtr_b[3]
+        a3 = qtr_a[2]*qtr_b[0] + qtr_a[3]*qtr_b[1] + qtr_a[0]*qtr_b[2] - qtr_a[1]*qtr_b[3]
+        a4 = qtr_a[3]*qtr_b[0] - qtr_a[2]*qtr_b[1] + qtr_a[1]*qtr_b[2] + qtr_a[0]*qtr_b[3]
+        
+        qtr_mult = np.array([a1/mod_qtr,a2/mod_qtr,a3/mod_qtr,a4/mod_qtr])
+        # print(qtr_multiplication)
+        return qtr_mult
+
+    def qtr_un_calculus(self,qtr_a,qtr_c): #to find qtr_b in equation qtr_a**qtr_b = qtr_c (where ** - quaterninal multiplication)
+        #в последствии будте таблица соответствия актеров и потоков, пока остается константами        
+        # print(vtk.vtkQuaterniond(self.qtrs[1]).ToMatrix3x3([[0,0,0],[0,0,0],[0,0,0]]))
+        qtr_a = np.array(qtr_a)
+        qtr_c = np.array(qtr_c)
+        mod_qtr = -1*(qtr_a[0]*qtr_a[0] + qtr_a[1]*qtr_a[1] + qtr_a[2]*qtr_a[2] + qtr_a[3]*qtr_a[3]) # mod for multiplication of quaternions
+        
+        # self.qtrs[i_from_actor] - a - quater
+        # self.qtrs[i_to_actor]   - c - quater
+
+        a1 = -1*qtr_a[0]*qtr_c[0] - qtr_a[1]*qtr_c[1] - qtr_a[2]*qtr_c[2] - qtr_a[3]*qtr_c[3]
+        a2 = qtr_a[1]*qtr_c[0] - qtr_a[0]*qtr_c[1] - qtr_a[3]*qtr_c[2] + qtr_a[2]*qtr_c[3]
+        a3 = qtr_a[2]*qtr_c[0] + qtr_a[3]*qtr_c[1] - qtr_a[0]*qtr_c[2] - qtr_a[1]*qtr_c[3]
+        a4 = qtr_a[3]*qtr_c[0] - qtr_a[2]*qtr_c[1] + qtr_a[1]*qtr_c[2] - qtr_a[0]*qtr_c[3]
+
+        qtr_mult = np.array([a1/mod_qtr,a2/mod_qtr,a3/mod_qtr,a4/mod_qtr])
+        return qtr_mult #vtk.vtkQuaterniond(np.array(self.qtrs[1])+np.array(qtr)).Normalized()
+
+    def three_qtr_solve(self,qtr_c,qtr_a,qtr_b): # C = X*A*B (looking for X)
+
+        a1 = qtr_a[0]
+        a2 = qtr_a[1]
+        a3 = qtr_a[2]
+        a4 = qtr_a[3]
+
+        b1 = qtr_b[0]
+        b2 = qtr_b[1]
+        b3 = qtr_b[2]
+        b4 = qtr_b[3]
+
+        mod_ab = (a1*a1+a2*a2+a3*a3+a4*a4)*(b1*b1+b2*b2+b3*b3+b4*b4)
+
+        c1 = qtr_c[0]
+        c2 = qtr_c[1]
+        c3 = qtr_c[2]
+        c4 = qtr_c[3]
+
+        x01 = (-a3*b3*c1-a4*b4*c1-a4*b3*c2+a3*b4*c2+a3*b1*c3+a4*b2*c3+a4*b1*c4-a3*b2*c4+a2*(-b2*c1+b1*c2-b4*c3+b3*c4)+a1*(b1*c1+b2*c2+b3*c3+b4*c4))/mod_ab
+                
+        x02 = (a4*b3*c1-a3*b4*c1-a3*b3*c2-a4*b4*c2-a4*b1*c3+a3*b2*c3+a3*b1*c4+a4*b2*c4+a1*(-b2*c1+b1*c2-b4*c3+b3*c4)-a2*(b1*c1+b2*c2+b3*c3+b4*c4))/mod_ab
+                
+        x03 = (-a1*b3*c1+a2*b4*c1+a2*b3*c2+a1*b4*c2+a1*b1*c3-a2*b2*c3-a2*b1*c4-a1*b2*c4+a4*(-b2*c1+b1*c2-b4*c3+b3*c4)-a3*(b1*c1+b2*c2+b3*c3+b4*c4))/mod_ab
+        
+        x04 = (-a2*b3*c1-a1*b4*c1-a1*b3*c2+a2*b4*c2+a2*b1*c3+a1*b2*c3+a1*b1*c4-a2*b2*c4+a3*(b2*c1-b1*c2+b4*c3-b3*c4)-a4*(b1*c1+b2*c2+b3*c3+b4*c4))/mod_ab
+
+        qtr_x = np.array([x01,x02,x03,x04])
+
+        return qtr_x
+
+    def three_qtr_multiplication(self,qtr_a,qtr_b,qtr_c): # X = A*B*C (looking for X)
+
+        a1 = qtr_a[0]
+        a2 = qtr_a[1]
+        a3 = qtr_a[2]
+        a4 = qtr_a[3]
+
+        b1 = qtr_b[0]
+        b2 = qtr_b[1]
+        b3 = qtr_b[2]
+        b4 = qtr_b[3]
+
+        c1 = qtr_c[0]
+        c2 = qtr_c[1]
+        c3 = qtr_c[2]
+        c4 = qtr_c[3]
+
+        x01 = -a4*(b4*c1-b3*c2+b2*c3+b1*c4)-a3*(b3*c1+b4*c2+b1*c3-b2*c4)-a2*(b2*c1+b1*c2-b4*c3+b3*c4)+a1*(b1*c1-b2*c2-b3*c3-b4*c4)
+
+        x02 = a3*(b4*c1-b3*c2+b2*c3+b1*c4)-a4*(b3*c1+b4*c2+b1*c3-b2*c4)+a1*(b2*c1+b1*c2-b4*c3+b3*c4)+a2*(b1*c1-b2*c2-b3*c3-b4*c4)
+
+        x03 = -a2*(b4*c1-b3*c2+b2*c3+b1*c4)+a1*(b3*c1+b4*c2+b1*c3-b2*c4)+a4*(b2*c1+b1*c2-b4*c3+b3*c4)+a3*(b1*c1-b2*c2-b3*c3-b4*c4)
+
+        x04 = a1*(b4*c1-b3*c2+b2*c3+b1*c4)+a2*(b3*c1+b4*c2+b1*c3-b2*c4)-a3*(b2*c1+b1*c2-b4*c3+b3*c4)+a4*(b1*c1-b2*c2-b3*c3-b4*c4)
+
+        # x01 = (a1*b1-a2*b2-a3*b3-a4*b4)*c1-(a2*b1+a1*b2-a4*b3+a3*b4)*c2-(a3*b1+a4*b2+a1*b3-a2*b4)*c3-(a4*b1-a3*b2+a2*b3+a1*b4)*c4
+            
+        # x02 = (a2*b1+a1*b2-a4*b3+a3*b4)*c1+(a1*b1-a2*b2-a3*b3-a4*b4)*c2-(a4*b1-a3*b2+a2*b3+a1*b4)*c3+(a3*b1+a4*b2+a1*b3-a2*b4)*c4
+            
+        # x03 = (a3*b1+a4*b2+a1*b3-a2*b4)*c1+(a4*b1-a3*b2+a2*b3+a1*b4)*c2+(a1*b1-a2*b2-a3*b3-a4*b4)*c3-(a2*b1+a1*b2-a4*b3+a3*b4)*c4
+            
+        # x04 = (a4*b1-a3*b2+a2*b3+a1*b4)*c1-(a3*b1+a4*b2+a1*b3-a2*b4)*c2+(a2*b1+a1*b2-a4*b3+a3*b4)*c3+(a1*b1-a2*b2-a3*b3-a4*b4)*c4
+
+        qtr_x = np.array([x01,x02,x03,x04])
+
+        return qtr_x
+    
     def initial_qtr_norm(self):
         self.n_pos_temp_qtr = np.array([0.95, 0., 0.25, 0.])
         self.t_pos_temp_qtr = np.array([0.5, 0.5, 0.5, 0.5])
@@ -337,17 +468,20 @@ class MainWindow(QMainWindow):
         self.eps = 0.01
         self.flag_norm = 0
         self.motion_flag = list()
+        
 
     def start_video(self):
         self.frame_name = 'frame_'
         self.file_name = 'output_'
-        self.camera_paths = ['rtsp://192.168.1.2:8553/PSIA/Streaming/channels/1?videoCodecType=MPEG4','rtsp://192.168.1.5:8553/PSIA/Streaming/channels/1?videoCodecType=MPEG4']
+        self.camera_paths = ['rtsp://192.168.1.168:8553/PSIA/Streaming/channels/1?videoCodecType=MPEG4','rtsp://192.168.1.108:8553/PSIA/Streaming/channels/1?videoCodecType=MPEG4']
         self.NUM_CAMERAS = 2
         for idx in range(self.NUM_CAMERAS):            
             thread = QThread()
             thread.setObjectName('thread_' + str(-idx))
             
             temp = Camera_2.VideoRecorder(self.camera_paths[idx], self.frame_name + str(idx), self.file_name + str(idx) + str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.avi')
+            # temp.cam(self.camera_paths[idx], self.frame_name + str(idx), self.file_name + str(idx) + '.avi')
+            #temp.cam(self.camera_paths[idx], self.frame_name + str(idx), self.file_name + str(idx) + '.avi')
 
             self.__threads.append((thread, temp))
             temp.moveToThread(thread)
@@ -364,34 +498,94 @@ class MainWindow(QMainWindow):
         self.shifts = []
         self.a = [0,1,2,3]
         self.video_flag_on = 0
-        ip = ['192.168.1.8','192.168.1.3','192.168.1.9']
-        port = 5555
+   
+        broadcaster = network.Broadcaster()
+        thread = QThread()
+        thread.setObjectName('thread_' + str(0))
+        self.__threads.append((thread, broadcaster))  # need to store worker too otherwise will be gc'd
+        #self.__threadsstatus.append(self.network_stat) #нужно продумать как именно добавлять статусы многопоточности в виджите
+        broadcaster.moveToThread(thread)
+
+        broadcaster.sig_status.connect(self.on_broadcaster_status)
+        broadcaster.sig_msg.connect(self.log_text.append)
+
+        # control worker:
+        self.sig_abort.connect(broadcaster.abort)
+
+        # get read to start worker:
+        # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
+        thread.started.connect(broadcaster.work) #(self.port)
+        thread.start()
+        self.log_text.append("Broadcaster started")
+
+        # ip = ['192.168.1.112','192.168.1.8','192.168.1.9']
+        # port = 5555
                          
-        for idx in range(self.NUM_THREADS):
+        # for idx in range(self.NUM_THREADS):
             
-            worker = Worker.Worker(idx, port, ip[idx])
-            thread = QThread()
-            thread.setObjectName('thread_' + str(idx))
-            self.__threads.append((thread, worker))  # need to store worker too otherwise will be gc'd
-            self.__threadsstatus.append(self.sensor_im_1) #нужно продумать как именно добавлять статусы многопоточности в виджите
-            self.stat.append(-1)
-            self.qtrs.append([1.,0.,0.,0.])
-            self.shifts.append([0.,0.,0.])
-            worker.moveToThread(thread)
+        #     worker = Worker.Worker(idx, port, ip[idx])
+        #     thread = QThread()
+        #     thread.setObjectName('thread_' + str(idx))
+        #     self.__threads.append((thread, worker))  # need to store worker too otherwise will be gc'd
+        #     self.__threadsstatus.append(self.sensor_im_1) #нужно продумать как именно добавлять статусы многопоточности в виджите
+        #     self.stat.append(-1)
+        #     self.qtrs.append([1.,0.,0.,0.])
+        #     self.shifts.append([0.,0.,0.])
+        #     worker.moveToThread(thread)
 
-            worker.sig_shifts.connect(self.on_worker_shifts)
-            worker.sig_qtr.connect(self.on_worker_qtr)
-            worker.sig_status.connect(self.on_worker_status)
-            # worker.sig_msg.connect(self.log_text.append)
+        #     worker.sig_shifts.connect(self.on_worker_shifts)
+        #     worker.sig_qtr.connect(self.on_worker_qtr)
+        #     worker.sig_status.connect(self.on_worker_status)
+        #     worker.sig_msg.connect(self.log_text.append)
 
-            # control worker:
-            self.sig_abort_workers.connect(worker.abort)
-            # get read to start worker:
-            # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
-            thread.started.connect(worker.work) #(self.port)
-            port = port + 2
-            thread.start()  # this will emit 'started' and start thread event loop
-    
+        #     # control worker:
+        #     self.sig_abort.connect(worker.abort)
+
+        #     # get read to start worker:
+        #     # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
+        #     thread.started.connect(worker.work) #(self.port)
+        #     port = port + 2
+        #     thread.start()  # this will emit 'started' and start thread event loop
+
+    @pyqtSlot(int, int, str)
+    def on_broadcaster_status(self, flag: int, port: int, ip: str):
+
+        if flag == 1:
+            if self.num_workers < self.NUM_THREADS:
+                d = { "port" : port, 'ip': ip }
+                self.WorkerAdress.append(d)
+                # self.start_worker(self.num_workers, port, ip)
+                self.num_workers += 1
+            else:
+                pass
+
+    def start_worker(self, idx, port, ip):
+            
+        worker = Worker.Worker(idx, port, ip)
+        thread = QThread()
+        thread.setObjectName('thread_' + str(idx + 1))
+        self.__threads.append((thread, worker))  # need to store worker too otherwise will be gc'd
+        self.__threadsstatus.append(self.sensor_im_1) #нужно продумать как именно добавлять статусы многопоточности в виджите
+        self.stat.append(-1)
+        self.qtrs.append([1.,0.,0.,0.])
+        self.shifts.append([0.,0.,0.])
+        worker.moveToThread(thread)
+        
+        worker.sig_shifts.connect(self.on_worker_shifts)
+        worker.sig_qtr.connect(self.on_worker_qtr)
+        worker.sig_status.connect(self.on_worker_status)
+        worker.sig_msg.connect(self.log_text.append)
+
+        # control worker:
+        self.sig_abort.connect(worker.abort)
+
+        # get read to start worker:
+        # self.sig_start.connect(worker.work)  # needed due to PyCharm debugger bug (!); comment out next line
+        thread.started.connect(worker.work) #(self.port)
+        thread.start()
+
+        self.log_text.append('Worker #' + str(idx) + ' started.') 
+
     @pyqtSlot(int, list)
     def on_worker_shifts(self, worker_id: int, data: list):
         # self.log_text.append('Worker #{}: {}'.format(worker_id, data))
@@ -418,7 +612,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(int, int)
     def on_worker_status(self, worker_id: int, flag: int):
-        # self.log.append('worker #{} done'.format(worker_id))
+        #self.log_text.append('worker #{} done'.format(worker_id))
         # self.progress.append('-- Worker {} DONE'.format(worker_id))
         if (self.stat[worker_id] == flag):
             pass
@@ -443,6 +637,13 @@ class MainWindow(QMainWindow):
         #self.sig_abort_workers.emit()
         # self.log.append('Asking each worker to abort')
         for thread, Worker in self.__threads:  # note nice unpacking by Python, avoids indexing
+            thread.quit()  # this will quit **as soon as thread event loop unblocks**
+            thread.wait()  # <- so you need to wait for it to *actually* quit
+            
+    def abort(self):
+        self.sig_abort.emit()
+        # self.log.append('Asking each worker to abort')
+        for thread, task in self.__threads:  # note nice unpacking by Python, avoids indexing
             thread.quit()  # this will quit **as soon as thread event loop unblocks**
             thread.wait()  # <- so you need to wait for it to *actually* quit
 
@@ -589,7 +790,12 @@ class MainWindow(QMainWindow):
             self.log_text.append('To connect IP : ' + str(host_ip) )
             self.log_text.append('Start from port: 5555')
 
-App = QApplication(sys.argv)
-window = MainWindow()
-sys.exit(App.exec())
 
+if __name__ == "__main__":
+
+    # install exception hook: without this, uncaught exception would cause application to exit
+    sys.excepthook = trap_exc_during_debug
+
+    App = QApplication(sys.argv)
+    window = MainWindow()
+    sys.exit(App.exec())
