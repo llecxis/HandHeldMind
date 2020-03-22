@@ -13,8 +13,6 @@ import traceback
 import Worker as Worker
 import Draw
 import QtrCalc as QC
-# import Camera_1 as Ca1
-# import Camera_2 as Ca2
 import Camera_2 
 from scipy.spatial.transform import Rotation as R
 import network
@@ -119,112 +117,31 @@ class MainWindow(QMainWindow):
         # прописывать обработку всех кликов по кнопкам
 
     def n_qtr_shift(self): #нужно вставаить соответствие между масивами актеров и потоками
-        # temp_mat = np.array([[0,0,0],[0,0,0],[0,0,0]])
-        # sol_mat = np.array([[0,0,0],[0,0,0],[0,0,0]])
-
-        self.qtrs[2] = self.qtr_norm(np.array([-1.0, -0.004, -0.017, 0.008]))
+        
         self.N_arm_pos = np.array([0.95,0.,0.25,0.])
 
         # # ############### get qtr from matrix
         self.N_ref_imu = self.qtrs[2]
         self.N_arm_imu = self.qtrs[1]
-
         # # ################ get qtr from matrix
-        # self.log_text.append("T - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]) )
 
-        #self.log_text.append(str(self.N_ref_imu) + ' ...  ' + str(np.linalg.norm(self.N_ref_imu)) + '  ....  ' + str(self.qtr_norm(self.N_ref_imu)) + ' ... ' +  str(np.linalg.norm(self.qtr_norm(self.N_ref_imu)))   )
-        # self.log_text.append(str(self.N_arm_pos) + ' ... ' + str(self.qtr_norm(self.N_arm_pos)))
-        # self.log_text.append('[1,0.,0.,0.] -> ' + str(self.n_pos_temp_qtr))
-        
-        # Ivan Equation
-        self.X_qtr = self.three_qtr_solve(self.qtr_inv(self.N_arm_pos),self.qtr_inv(self.N_arm_imu),self.N_ref_imu)
-        self.Z_qtr = self.qtr_inv(self.N_ref_imu)
-        self.Y_qtr = self.N_arm_imu
+        self.log_text.append("N - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]) )
 
-        # self.log_text.append("N - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
-        self.X_qtr = self.three_qtr_solve(self.N_arm_pos, self.qtr_inv(self.N_arm_imu), self.N_ref_imu)
+        self.X_qtr = QC.qtr_calculus(np.array([1.0, 0.0, 0.0, 0.0]), self.N_ref_imu)
 
-        self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
-        # Ivan Equation
+        self.Y_qtr = QC.qtr_calculus(np.array([1.0, 0.0, 0.0, 0.0]), self.N_arm_imu)
 
-        
+        self.flag_norm = 1
 
-        # self.X_qtr = self.three_qtr_solve(self.N_arm_pos, self.qtr_inv(self.N_arm_imu), self.N_ref_imu,)
-        # self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
-        # self.log_text.append('Initial = ' + str(self.three_qtr_multiplication(self.ZYX_qtr, self.qtr_inv(self.qtrs[1]), self.N_ref_imu)) + ' == ' + str(self.N_arm_pos))
-
-        #self.log_text.append(str(self.X_qtr))
-
-        # self.n_pos_temp_mat = self.scene.mtxRot[4]
-        # self.n_pos_temp_qtr = self.qtr_un_calculus(self.qtrs[0],[0.95,0.,0.25,0.])
-        # self.log_text.append('[1,0.,0.,0.] -> ' + str(self.n_pos_temp_qtr))
-        #
+        self.log_text.append('Initial X_qtr= ' + str(self.X_qtr) )
+        self.log_text.append('Initial Y_qtr= ' + str(self.Y_qtr) )
 
     def t_qtr_shift(self):
         
         self.log_text.append("T - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]) )
 
-        self.qtrs[2] = np.array([-1.0, -0.004, -0.017, 0.008])
         self.T_arm_pos = np.array([-0.7,-0.7,0.,0.]) #([-0.7,-0.7,0.,0.]) # [-0.7,-0.7,0.,0.]
         self.N_arm_pos = np.array([0.95,0.,0.25,0.])
-
-        #  #Sergey ########################################################
-        # T_rotImuArmAtGlob = R.from_quat(self.qtrs[1])
-        # N_rot_arm_imu = R.from_quat(self.N_arm_imu)
-
-        # T_rotArmAtGlob = T_rotImuArmAtGlob * N_rot_arm_imu.inv()
-        # T_mtxArmAtGlob = T_rotArmAtGlob.as_dcm()
-
-        #  # use second column of the matrix which is the Y direction in T-pose
-        # T_Y_dirArmAtGlob = T_mtxArmAtGlob[:,1]
-        # # Compose body rot using 3 vec columns
-        # Z_dirBodyAtGlob = -T_Y_dirArmAtGlob
-        # Y_dirBodyAtGlob = np.array([0, 1, 0])  # y - axis dir
-        # # the third vec is the cross-product of the two
-        # X_dirBodyAtGlob = np.cross(Y_dirBodyAtGlob, Z_dirBodyAtGlob)
-        # # combine as rows and transpose
-        # mtxBodyAtGlob = np.array([X_dirBodyAtGlob, 
-        #                           Y_dirBodyAtGlob, 
-        #                           Z_dirBodyAtGlob]).transpose()
-
-        # self.rotBodyAtGlob = R.from_dcm(mtxBodyAtGlob)
-        # temp_r = self.rotBodyAtGlob.inv()
-        # self.X_qtr = temp_r.as_quat()
-
-        # self.log_text.append("T - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
-
-        # self.log_text.append("Computer get as input " + str(self.qtr_multiplication(self.X_qtr, self.qtrs[1]))        
-
-        ########################################## get matrix from qtr
-
-        right_side = self.three_qtr_multiplication(self.X_qtr,self.qtr_inv(self.qtrs[1]), self.N_ref_imu)
-        
-        self.Y_qtr = self.three_qtr_solve(self.T_arm_pos, right_side, np.array([1.,0.,0.,0.]))
-        self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
-
-        # self.N_arm_imu = self.qtrs[1] #test variant
-        # #self.N_arm_imu is taken from the previous to save N pose
-        # self.N_arm_in_t_pos = self.three_qtr_multiplication(self.X_qtr, self.N_ref_imu, self.N_arm_imu)
-        # self.T_arm_imu = self.qtr_un_calculus(self.N_arm_imu,self.qtrs[1])
-        # self.T_arm_imu = self.qtrs[1]
-        # self.Y_qtr = self.three_qtr_solve(self.T_arm_pos, self.N_arm_pos, self.T_arm_imu)
- 
-
-        # temp = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv( self.qtrs[1] ), self.N_ref_imu)
-        # self.log_text.append('Initial = ' + str(temp) + ' = ' + str( self.T_arm_pos ) )
-
-        # temp = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv( self.N_arm_imu), self.N_ref_imu)
-        # self.log_text.append('Initial = ' + str(temp) + ' = ' + str( self.N_arm_pos ) )
-
-        temp = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv( self.qtrs[1] ), self.N_ref_imu)
-
-        self.log_text.append('Initial = ' + str(temp) + ' = ' + str( self.T_arm_pos ) )
-
-        temp = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv( self.N_arm_imu), self.N_ref_imu)
-
-        self.log_text.append('Initial = ' + str(temp) + ' = ' + str( self.N_arm_pos ) )
-        #self.log_text.append(str(self.Y_qtr))
-        #self.log_text.append(str(self.YX_qtr))
 
     def qtr_to_mtx(self, qtr):
         end = np.identity(3)
@@ -234,32 +151,13 @@ class MainWindow(QMainWindow):
 
     def mtx_to_qtr(self,mtx):        
         end = vtk.vtkQuaterniond(np.array([1.,0.,0.,0.]))
-        #print(mtx.as_dcm())
+        print(mtx.as_dcm())
         end.FromMatrix3x3(mtx)
         return end
 
     def z_qtr_shift(self):
-        
-        # self.scene.reInitialize_actors(self.qtrs[2])
 
-        for i,el in enumerate(self.WorkerAdress):
-            self.start_worker(i, el['port'], el['ip'])
-
-        self.start_video()
-
-        # self.log_text.append("Z - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]))
-        # self.Z_arm_pos = np.array([0.7,0.,0.,0.7])
-        # right_side = self.three_qtr_multiplication(self.ZYX_qtr,self.qtr_inv(self.qtrs[1]), self.N_ref_imu)
-        # self.Z_qtr = self.three_qtr_solve(self.Z_arm_pos,right_side, np.array([1.,0.,0.,0.]))
-        # self.ZYX_qtr = self.three_qtr_multiplication(self.Z_qtr,self.Y_qtr,self.X_qtr)
-        # self.log_text.append(str(self.three_qtr_multiplication(self.YX_qtr,self.qtr_inv(self.qtrs[1]),self.qtrs[2])))
-        # self.X_qtr = np.array([1, 0., 0., 0.])
-        # self.Y_qtr = np.array([1, 0., 0., 0.])
-        # self.YX_qtr = np.array([1, 0., 0., 0.])
-        # self.N_arm_imu = np.array([1, 0., 0., 0.])
-        # self.z_pos_temp_mat = self.scene.mtxRot[4]
-        # self.z_pos_temp_qtr = self.qtrs[1]
-        # self.log_text.append(str(self.z_pos_temp_mat))
+        self.log_text.append("Z - pose initialized with quaternions = " + str(self.qtrs[0]) + " " + str(self.qtrs[1]) + " " + str(self.qtrs[2]) + " " + str(QC.qtr_multiplication(self.Y_qtr,self.qtrs[1])))
 
     def vtkCall(self):      
         self.play.setDisabled(True)
@@ -389,48 +287,23 @@ class MainWindow(QMainWindow):
         
         try:
             if (len(self.qtrs) > 0 ):    
-                i_actor = 4
-                #self.temp_qtr = self.qtrs[1]  
-                self.temp_qtr = self.qtr_multiplication(self.ZYX_qtr, self.qtrs[1])
-                #self.temp_qtr = self.three_qtr_multiplication(self.qtr_inv(self.qtrs[2]), self.qtrs[1], self.qtr_inv(self.X_qtr)) Ivan eqution
+        #сюда преобразование координат qweqrty
+                if (self.flag_norm == 1):
+                    for el in range(len(self.scene.modelActor)):
+                        # temp_qtr = QC.qtr_multiplication(self.X_qtr,self.qtrs[2])  
+                        # actor_qtr = np.array([1.,0.,0.,0.])
+                        temp_shift = np.array([0.,0.,0.])
+                        self.motion_flag = np.array([0,[1.,0.,0.,0.]])
+                        if (el == 4): # or (el == 10):
+                            # actor_qtr = QC.qtr_multiplication(self.Y_qtr,self.qtrs[1])
+                            # temp_shift = self.shift_calculus(4,el)
+                            self.motion_flag = np.array([1, QC.qtr_multiplication(self.qtrs[1],np.conj(QC.qtr_multiplication(self.X_qtr,self.qtrs[2])))])            
 
-                self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[1], i_actor)
+                        temp_qtr = QC.qtr_multiplication(self.X_qtr,self.qtrs[2]) # QC.qtr_multiplication(actor_qtr,np.conj(QC.qtr_multiplication(self.X_qtr,self.qtrs[2])))
+                        self.scene.SetRefQuatOrientation(temp_qtr, temp_shift, el, self.motion_flag )
 
-                i_actor = 5
-                #self.actors_shift = np.array(self.scene.initial_pos_actors[4]) + np.array(self.scene.mtxRot).dot(np.array(self.scene.initial_pos_actors[5]) - np.array(self.scene.initial_pos_actors[4]))
-                self.shifts[0] = self.shift_calculus(4,i_actor)
-                #self.temp_qtr = self.qtr_calculus(4,i_actor)
-                #self.temp_qtr = self.qtr_multiplication(self.qtrs[0], self.n_pos_temp_qtr)
-                self.temp_qtr = self.qtrs[0]
-                # print(self.actors_shift,self.scene.initial_pos_actors[4])
-                self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
-
-                i_actor = 10
-                self.shifts[0] = self.shift_calculus(4,i_actor)
-                #self.temp_qtr = self.qtr_calculus(4,i_actor)
-                #self.temp_qtr = self.qtr_multiplication(self.qtrs[0], self.n_pos_temp_qtr)
-                self.temp_qtr = self.qtrs[0]
-                self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
-
-                # print(abs(round(self.check[2] - self.qtrs[2][2], 3)), ' ', self.eps)
-                # if (abs(self.check[2] - self.qtrs[2][2]) > self.eps):
-                #     self.check[2] = self.qtrs[2][2]
-
-                # for el in range(len(self.scene.modelActor)):
-                #     self.scene.SetRefQuatOrientation(self.qtrs[2], self.shifts[0], el) # self.qtr_multiplication(self.scene.initial_pos_actors[el],self.scene.norm_qtr[el])
-
-                # i_actor = 2
-                # self.shifts[0] = self.shift_calculus(2,i_actor)
-                # #self.temp_qtr = self.qtrs[2] #self.qtr_multiplication(self.qtrs[2], np.array([1.,0.,0.,0.]))
-                # self.temp_qtr = self.qtr_multiplication(self.qtrs[2], np.array([1.,0.,0.,0.]))
-                # #self.log_text.append(str(self.temp_qtr))
-                # self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
-
-                # i_actor = len(self.scene.modelActor)
-                # self.temp_qtr = self.rotBodyAtGlob.as_quat()
-                # self.scene.SetQuatOrientation(self.temp_qtr, self.shifts[0], i_actor)
-
-                self.iren.Render() #NOT: self.ren.Render()
+                    self.iren.Render() #NOT: self.ren.Render()
+                print("No data")
         except:
             print("No worker ", i_actor) 
     
@@ -593,6 +466,8 @@ class MainWindow(QMainWindow):
         self.N_arm_imu = np.array([1, 0., 0., 0.])
         self.check = np.array([1.,0.,0.,0.])
         self.eps = 0.01
+        self.flag_norm = 0
+        self.motion_flag = list()
         
 
     def start_video(self):
@@ -924,4 +799,3 @@ if __name__ == "__main__":
     App = QApplication(sys.argv)
     window = MainWindow()
     sys.exit(App.exec())
-
