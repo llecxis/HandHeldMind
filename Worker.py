@@ -13,6 +13,7 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import socket
 import traceback
 import os
+# from MainWindow_show import *
 #import Camera_test as ct
 
 #import re
@@ -32,10 +33,10 @@ import network
 def parse(mes):
     mes = mes.decode("utf-8").replace(" ", "")
     if (mes[0] == "#") :
-        print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
+        #print('Sent:', mes[1:], '; Received: ', 'in {}s'.format(1))
         d = 1
     else :
-        d = {}
+        d = {}        
         idx = mes.split("#")[0]
         d["id"] = idx
         for measure in mes.split("#")[1:]:
@@ -57,12 +58,11 @@ class Worker(QObject):
     sig_shifts = pyqtSignal(int, list)  # worker id, step description: emitted every 5 steps through work() loop
     sig_qtr = pyqtSignal(int, list)  # worker id, step description: emitted every step through work() loop
     sig_status = pyqtSignal(int, int)  # worker id: emitted status()
-    sig_msg = pyqtSignal(str)  # message to be shown to user
+    sig_msg = pyqtSignal(str)  # message to be shown to user   
 
-    
-
-    def __init__(self, id: int, port: int, ip: str, file_prefix='new_data/'):
+    def __init__(self, id: int, port: int, ip: str, App: object, file_prefix='new_data/'):
         super().__init__()
+        self.app = App
         self.__id = id
         self.ip = ip
         self.port = port   
@@ -78,7 +78,7 @@ class Worker(QObject):
     @pyqtSlot()
     def work(self):
 
-        te = 100
+        te = 300 #time of data collecting 
         
         #emptylist = list()
 
@@ -94,25 +94,22 @@ class Worker(QObject):
 
         # for step in range(100):
         #     time.sleep(0.1)
-        ##################################################
+        ##################################################        
 
-        while 1:
-            
+        while (self.__abort == False):
             self.sync_time()
-
             dt = datetime.now()
             local_path = os.getcwd()
-            filename = os.path.join(local_path,'new_data/', str(self.port) + str(time.strftime("_%d_%m_%Y_%H_%M_%S",time.gmtime(time.time()))) + '.csv')
-
-            # filename = self.file_prefix + str(self.port)+ dt.isoformat() + '.csv'
+            #print(local_path)
+            filename = os.path.join(local_path,'new_data/', str(time.strftime("%d_%m_%Y_%H_%M_%S_",time.gmtime(time.time()))) + str(self.port) + '.csv')
             with open(filename, 'a') as the_file:
                 the_file.write('#id, computer time,time, calib_status, rot_vec,,,, 					lin_acc,,, 						grav\n')
-            
-            self.receive_data(filename)
+            self.receive_data(filename, te)            
+            # self.receive_data()
 
     def sync_time(self):
         
-        res_time=1000000
+        res_time=1000
 
         mes_test = 'time'
         message = ''
@@ -121,16 +118,17 @@ class Worker(QObject):
         cur_mes_test = mes_test + ',' + str_ms
     
         self.sckt_out.send(cur_mes_test.encode())
-
+        # print(cur_mes_test.encode())
         while 1:
             try:
-                if message[:len(mes_test)] == mes_test:
-                    
+                # print('before if', message[:len(mes_test)], " need", mes_test)
+                if message[:len(mes_test)] == mes_test:                    
                     t1_r = int(message.split(',')[2])
                     t2_s = int(message.split(',')[3])
                     str_ms = str((t2_r - self.start)*res_time).split('.')[0]
                     cur_mes_test = message + ',' + str_ms
-                    
+                    # print("end 0")
+
                     time.sleep(0.01)
                     t3_s = time.time()
                     str_ms = str((t3_s - self.start)*res_time).split('.')[0]
@@ -138,15 +136,19 @@ class Worker(QObject):
                     self.sckt_out.send(cur_mes_test.encode())
                     break
                 else:
+                    # print("end 01")
                     mes, address = self.sckt_out.recvfrom(8192)
                     message = mes.decode()
                     t2_r = time.time()
-                
+                    # print(message)
+
+                # print('out if end')
             except socket.timeout:
                 t1_s = time.time()
                 str_ms = str((t1_s - self.start)*res_time).split('.')[0]
                 cur_mes_test = mes_test + ',' + str_ms
                 self.sckt_out.send(cur_mes_test.encode())
+                # print(cur_mes_test.encode())
             #TODO: add exception for message 
             except (KeyboardInterrupt, SystemExit):
                 raise
@@ -159,7 +161,9 @@ class Worker(QObject):
         self.offset = round((t1_r - t1_s - t2_r + t2_s) / 2)
         self.delay = round((t1_r - t1_s + t2_r - t2_s) / 2)
         
-    def receive_data(self, filename, time_end=100):
+    
+    @pyqtSlot() 
+    def receive_data(self, filename = None, time_end=300):
         
         flag = 1
         x = list()
@@ -180,6 +184,7 @@ class Worker(QObject):
         emptylist = []   
 
         beg = time.time()
+        
         while 1:
             try: 
                 ready = select.select([self.sckt_in], [], [], 1)
@@ -243,13 +248,13 @@ class Worker(QObject):
                     M = temp_max
                     #print(temp_max)
 
-                qtr = [float(item) for item in d['rotvec'][0:4]]
+                qtr = [float(item) for item in d['rotvec']]
 
                 # qtr = [float(d['rotvec'][2]),float(d['rotvec'][0]),float(d['rotvec'][1]),float(d['rotvec'][3])]
 
 
                 #print(qtr)
-                self.sig_qtr.emit(self.__id,qtr)
+                self.sig_qtr.emit(self.port,qtr)  
 
                 #i += 1
                 #length = 25 #длина окна усреденения
@@ -335,34 +340,40 @@ class Worker(QObject):
             #         # note that "step" value will not necessarily be same for every thread
             #         self.sig_msg.emit('Worker #{} aborting work at step {}'.format(self.__id, step))
             #         break
-                if (self.port == 5563) and (diff%10 > 999):
-                    print(i)
-                if diff >= time_end:
-                    dt = datetime.now()
+
+                self.app.processEvents()
+                if (diff >= time_end) or (self.__abort):
                     with open(filename, 'a') as the_file:
                         for el in emptylist:
                             the_file.write(', '.join(str(eli) for eli in el))
                             the_file.write('\n')
-                    #print(str(self.port), " - stopped" )  
-                    #print(M)
-                     #print(gist_times)
-                     #print(times)  
+                    self.sig_status.emit(self.__id, 0)
+                    self.sig_msg.emit(str(self.port) + " - stopped")
                     break           
     
             except (KeyboardInterrupt, SystemExit):
+                with open(filename, 'a') as the_file:
+                    for el in emptylist:
+                        the_file.write(', '.join(str(eli) for eli in el))
+                        the_file.write('\n')
+                self.sig_status.emit(self.__id, 1)
+                print(str(self.port), " - aborted" )
                 raise
             except:
                 traceback.print_exc()
         
         ##################################################
-
+    
     def abort(self):
-        self.sig_msg.emit('Worker #{} notified to abort'.format(self.__id))
+        # self.sig_msg.emit('Worker #{} notified to abort'.format(self.__id))
         self.__abort = True
+    
 
-    def __del__(self):
-        self.sckt_in.shutdown()
+
+    def __del__(self):        
+        self.__abort = True
+        self.sckt_in.shutdown(0)
         self.sckt_in.close()
-        self.sckt_out.shutdown()
+        self.sckt_out.shutdown(0)
         self.sckt_out.close()
         print('Worker sockets closed')

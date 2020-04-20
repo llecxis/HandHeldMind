@@ -37,6 +37,7 @@ class Broadcaster(QtCore.QObject):
 
     sig_status = QtCore.pyqtSignal(int, int, str)  # broadcaster id: emitted status()
     sig_msg = QtCore.pyqtSignal(str)  # message to be shown to user
+    sig_ports = QtCore.pyqtSignal(int)
 
     def __init__(self, port=5550):
         super().__init__()
@@ -56,7 +57,7 @@ class Broadcaster(QtCore.QObject):
         self.sckt.sendto(self.msg.encode(), self.dest)
         self.sig_msg.emit("Message sent: " + self.msg)
 
-        while 1:
+        while (self.__abort == False):
             try:
                 msg_device, address = self.sckt.recvfrom(8192)
                 # print(msg_device.decode())
@@ -66,6 +67,7 @@ class Broadcaster(QtCore.QObject):
                         self.found_devices = True
                         self.sig_msg.emit("Connected to " + address[0] + ":" + str(port))
                         self.sig_status.emit(1, port, address[0])
+                        self.sig_ports.emit(port)
             except socket.timeout:
                     self.sckt.sendto(self.msg.encode(), self.dest)
                     if not self.found_devices:
@@ -73,16 +75,16 @@ class Broadcaster(QtCore.QObject):
             except Exception as e:
                 print("Unexpected error: ", e)
                 pass
-
-            #time.sleep(1)
         
 
     def abort(self):
-        self.sig_msg.emit('Broadcaster notified to abort')
+        print(1)
+        # self.sig_msg.emit('Broadcaster notified to abort')
         self.__abort = True
+        
     
     def __del__(self):
 
-        self.sckt.shutdown()
+        self.sckt.shutdown(0)
         self.sckt.close()
         print('Worker sockets closed')
